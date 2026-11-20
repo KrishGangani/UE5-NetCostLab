@@ -20,8 +20,6 @@ Run through the queue only:
       -- 'python -I -u "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\foundation_job.py"'
 """
 import argparse
-import datetime as dt
-import json
 import os
 import re
 import subprocess
@@ -85,12 +83,9 @@ def main() -> int:
     parser.add_argument("--label", default="foundation")
     args = parser.parse_args()
     selected = [s for s in STEPS if not args.only or s[0] in args.only.split(",")]
-    batch = dt.datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_" + args.label
-    raw_dir = os.path.join(env.P05_ROOT, "Benchmarks", "Raw")
-    out_dir = os.path.join(raw_dir, batch)
-    os.makedirs(out_dir, exist_ok=True)
+    batch, out_dir = env.new_batch(args.label)
     manifest = {"batch": batch, "purpose": "Phase 2 probe P2-1 and Phase 4 checks F1-F4, one queue job",
-                "engine": "UE 5.8.4 (CL 58902052), launcher build", "only": args.only or "all", "steps": {}}
+                "engine": env.ENGINE, "only": args.only or "all", "steps": {}}
     selected_names = {s[0] for s in selected}
     failed = set()
     for name, command, needs in selected:
@@ -104,9 +99,7 @@ def main() -> int:
         manifest["steps"][name] = result
         if result["exit_code"] != 0:
             failed.add(name)
-    manifest_path = os.path.join(raw_dir, f"{batch}_manifest.json")
-    with open(manifest_path, "w", encoding="utf-8") as handle:
-        handle.write(env.sanitize(json.dumps(manifest, indent=2)))
+    manifest_path = env.write_manifest(batch, manifest)
     print(f"\n[job] manifest: {manifest_path}; failed steps: {sorted(failed) or 'none'}", flush=True)
     return 1 if failed else 0
 

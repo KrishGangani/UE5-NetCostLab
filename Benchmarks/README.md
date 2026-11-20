@@ -5,11 +5,11 @@ Every number in this project's write-up must trace back to a file in this folder
 ## Measurement rules
 
 1. **Baselines first.** C1–C4 are captured (S5) before the gameplay prioritiser exists, on the same workload, binaries and machine as every later run.
-2. **One server binary for all five configurations:** the Development **editor binary** in dedicated-server mode (`UnrealEditor-Cmd.exe … -server`), uncooked. The launcher engine cannot build a Server target, a packaged game can never be a dedicated server, and packaged games on the launcher engine have no push model ([01b](../Explanation/01b_Research_Findings.md) #1–#3). Clients are the **packaged Development game**, headless (`-nullrhi`): Phase 4 check F4 showed they join the editor-binary server in both systems at ≈ 0.35–0.54 GB each, against ≈ 1.7 GB for an editor-binary client (`09`).
+2. **One server binary for all six configurations:** the Development **editor binary** in dedicated-server mode (`UnrealEditor-Cmd.exe … -server`), uncooked. The launcher engine cannot build a Server target, a packaged game can never be a dedicated server, and packaged games on the launcher engine have no push model ([01b](../Explanation/01b_Research_Findings.md) #1–#3). Clients are the **packaged Development game**, headless (`-nullrhi`): Phase 4 check F4 showed they join the editor-binary server in both systems at ≈ 0.35–0.54 GB each, against ≈ 1.7 GB for an editor-binary client (`09`).
 3. **Real time, not a fixed step.** The server runs at its 30 Hz cap, clients at 30 fps. A fixed-step server would simulate faster than real time while bandwidth and timeouts follow the wall clock (`01b` #4).
 4. **The server opens and closes the capture window itself** (`CSV_EVENT(BenchStart)` after all clients joined and a 20 s warm-up; 1,800 captured frames = 60 s).
 5. **Core pinning, recorded per run:** the server on the performance cores (mask `0xFFFF`), the clients on the efficiency cores (`0xFF0000`). The run script pins itself to the right mask right before starting each process (the child inherits it from its first instruction), starts the real executable directly with `Popen` (so its own exit code is recorded), and records the mask each process actually inherited.
-6. **One discarded priming run per batch**, then **runs per combination = the number of configurations in the batch**, interleaved, with the configuration order rotated every round (Scenario A: 5 configs → 5 runs; Scenario B: 3 configs → 3 runs).
+6. **One discarded priming run per batch**, then **runs per combination = the number of configurations in the batch**, interleaved, with the configuration order rotated every round (Scenario A: 6 configs → 6 runs; Scenario B: 4 configs → 4 runs).
 7. **Statistics:** median, p95 and p99 per run (linear-interpolation percentiles), then the median across runs with the [min–max] across runs. Slopes are least-squares fits over N = 8/16/32 and are never extrapolated.
 8. **The environment is recorded with every batch** (below), automatically, by the run script.
 
@@ -24,7 +24,7 @@ Every number in this project's write-up must trace back to a file in this folder
 
 `<batch>_<Config>_<Scenario>_N<clients>[_L<loss%>]_r<run>.<ext>`, with `<batch>` = `YYYY-MM-DD_HHMMSS[_label]`
 
-- `<Config>`: `C1` legacy · `C2` legacy + push · `C3` Replication Graph · `C4` Iris · `C5` Iris + gameplay prioritiser.
+- `<Config>`: `C1` legacy · `C2` legacy + push · `C3` Replication Graph · `C4` Iris · `C5` Iris + gameplay prioritiser · `C6` legacy + push + the same focus rule in `GetNetPriority`.
 - `<Scenario>`: `A` (open: 1,000,000 B/s per client, no loss) or `B` (capped, 0/1/3/5% loss).
 - Example: `2026-11-30_101500_C4_B_N16_L3_r2_server.csv`, `…_client07_arrivals.bin`, `…_server_truth.bin`.
 - `_r0_prime` files are the discarded priming run, kept for transparency and excluded from every summary.

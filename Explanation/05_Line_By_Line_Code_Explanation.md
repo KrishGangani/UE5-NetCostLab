@@ -6,6 +6,7 @@
 |---|---|---|
 | A | Phase 4, F1–F3 (foundation) | `.uproject`, two `Target.cs`, two `Build.cs`, two module `.cpp`, `.uplugin`, config `.ini` files, `Tools\*.bat` |
 | B | Phase 2 probe and Phase 4 check F4 | `Tools\netlab_env.py`, `Tools\probe_net.py`, `Tools\foundation_job.py`, the removed probe `NetCostLabServer.Target.cs` |
+| C | Phase 5, S1 (the workload) | `NetCostLab.Build.cs` (update), `NCLLog.h`, `NCLNet.h`, module `.cpp` (update), `NCLDrone`, `NCLProp`, `NCLPlayerAvatar`, `NCLPlayerController`, `NCLGameMode`, `NCLWorkloadSubsystem`, `Tests\NCLWorkloadTests.cpp`, `Config\DefaultEngine.ini` (game mode), `Tools\check_job.py`, `Tools\run_tests.bat`, `Tools\probe_net.py`, `Tools\netlab_env.py`, `Tools\foundation_job.py` (updates) |
 
 ---
 
@@ -227,3 +228,198 @@ public class NetCostLabServerTarget : TargetRules
 ```
 
 `TargetType.Server` is the only line that matters: it asks for a dedicated-server executable. It had no `ExtraModuleNames` on purpose: UnrealBuildTool checks the installed platform list right after compiling the rules (`UEBuildTarget.cs:1365–1404`), before it looks at any module, so the probe needed nothing else.
+
+
+---
+
+## Part C · Step S1: the workload
+
+The workload is everything that replicates. It must be **identical in every configuration**, so it lives entirely on the server, depends on nothing but the seed and the server's clock, and never asks which replication system is running.
+
+### C1. `NetCostLab.Build.cs` (update) and `NCLLog.h`
+
+| Line | What it does, and why |
+|---|---|
+| `PrivateDependencyModuleNames.AddRange(new string[] { "NetCore" });` | `MARK_PROPERTY_DIRTY_FROM_NAME` lives in `Net/Core/PushModel/PushModel.h`, in the `NetCore` module. Only our `.cpp` files include it, so the dependency is **private** (`06` §2). `Iris`/`IrisCore` are still not needed: nothing in S1 talks to Iris |
+| `DECLARE_LOG_CATEGORY_EXTERN(LogNetCostLab, Log, All);` | One log category for the whole game module, declared in a header and defined once in the module `.cpp` (`DEFINE_LOG_CATEGORY(LogNetCostLab);`). `Log` is the default verbosity, `All` the most verbose level that can be compiled in. *Why not `DEFINE_LOG_CATEGORY_STATIC` per file (as P01 did):* every class of this module logs to the same category, so the check scripts can count "our" errors with one pattern (`LogNetCostLab: Error:`) |
+
+### C2. `NCLDrone.h` / `.cpp`: the drone
+
+```cpp
+USTRUCT()
+struct FNCLDroneState
+{
+	GENERATED_BODY()
+	UPROPERTY() uint16 Seq = 0;
+	UPROPERTY() uint8 Mode = 0;
+	UPROPERTY() int8 TargetSlot = -1;
+	UPROPERTY() int16 Health = 100;
+};
+```
+
+| Line | What it does, and why |
+|---|---|
+| `USTRUCT()` + `GENERATED_BODY()` | Makes the struct known to the reflection system, so it can be a replicated `UPROPERTY` (`06` §6). Without reflection the replication systems could not see its members |
+| `UPROPERTY() uint16 Seq` | Each member must be a `UPROPERTY` too, or it is not replicated. `Seq` counts gameplay changes (step S3 uses it to match a client's arrival to the server change). `uint16` (65,535) is plenty: one change per 2 s is 36 changes per minute |
+| `uint8 Mode`, `int8 TargetSlot`, `int16 Health` | The smallest integer types that hold the values: the legacy property serializer and Iris's quantisers both send fewer bits for smaller types, and every configuration pays the same. `int8` holds −1 ("nobody") and slots 0–127 |
+| Why one struct | `Seq`, `Mode`, `TargetSlot` and `Health` always change together; as one property they always arrive together, so a client can never see a new `Seq` with an old `Mode` |
+
+```cpp
+ANCLDrone::ANCLDrone()
+{
+	PrimaryActorTick.bCanEverTick = false;
+	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	bReplicates = true;
+	SetReplicatingMovement(true);
+	SetNetUpdateFrequency(30.0f);
+	SetNetCullDistanceSquared(FMath::Square(NCLNet::CullDistance));
+}
+```
+
+| Line | What it does, and why |
+|---|---|
+| `PrimaryActorTick.bCanEverTick = false` | The drone never ticks. 1,000 actor ticks would cost game-thread time that has nothing to do with replication and would differ from nothing; the workload subsystem moves all drones in one loop instead |
+| `RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"))` | An actor needs a root scene component to have a location. A bare `USceneComponent` has no mesh, no collision and no render state: nothing to cost the server. *Rejected:* a static mesh (only the S8 demo client draws anything) |
+| `bReplicates = true` | The actor replicates. Set in the constructor, so the class default already replicates and every system sees it from spawn |
+| `SetReplicatingMovement(true)` | Replicates the actor's position (`ReplicatedMovement`, push-based in the engine, `ActorReplication.cpp:580–581`). `SetReplicatingMovement` only sets the flag ("without causing other side effects", `Actor.h:4556–4557`), which is what a constructor wants; `SetReplicateMovement` (`:766`) also updates live replication state |
+| `SetNetUpdateFrequency(30.0f)` | Considered for replication up to 30 times per second: the server's tick rate, because drones move every tick. The public `NetUpdateFrequency` field is deprecated since 5.5 (`Actor.h:903`); the setter is the supported way |
+| `SetNetCullDistanceSquared(FMath::Square(NCLNet::CullDistance))` | 150 m relevancy, the engine default (`Actor.cpp:312`), written out so all three systems cull at the same distance (`01b` #11). The value lives once, in `NCLNet.h` (`inline constexpr float CullDistance = 15000.0f`, `04` §8), and drones, props and avatars all use it: three literal copies could drift apart (found by the S1 simplify pass). Squared, because distance checks compare squared lengths and skip a square root |
+
+```cpp
+FDoRepLifetimeParams PushBased;
+PushBased.bIsPushBased = true;
+DOREPLIFETIME_WITH_PARAMS_FAST(ANCLDrone, State, PushBased);
+...
+const FDoRepLifetimeParams InitialOnly{COND_InitialOnly, REPNOTIFY_OnChanged, /*bIsPushBased*/ true};
+DOREPLIFETIME_WITH_PARAMS_FAST(ANCLDrone, DroneIndex, InitialOnly);
+```
+
+| Line | What it does, and why |
+|---|---|
+| `Super::GetLifetimeReplicatedProps(OutLifetimeProps)` | Keeps `AActor`'s own replicated properties (movement, role, owner…). Forgetting it silently stops movement replication |
+| `bIsPushBased = true` | Registers the property for push model (`UnrealNetwork.h:134–151`): with `Net.IsPushModelEnabled=1` the server compares it only after `MARK_PROPERTY_DIRTY…` (C2–C6); with push off (C1) it is compared at every update like any other property. The same registration serves every configuration |
+| `DOREPLIFETIME_WITH_PARAMS_FAST` | Registers one replicated property with its parameters. `_FAST` uses the class's generated `ENetFields_Private` enum instead of a name lookup (`UnrealNetwork.h:231`). Every property tagged `Replicated` must be registered, or UnrealHeaderTool's check at start-up reports it |
+| `COND_InitialOnly` for `DroneIndex` | Sent with the drone's first replication only. The index never changes, so later updates never include or compare it |
+| `REPNOTIFY_OnChanged` | The default notify rule; no `OnRep` exists for these properties in S1 |
+
+```cpp
+void ANCLDrone::ApplyStateChange(uint8 NewMode, int8 NewTargetSlot, int16 NewHealth)
+{
+	++State.Seq;
+	State.Mode = NewMode; State.TargetSlot = NewTargetSlot; State.Health = NewHealth;
+	MARK_PROPERTY_DIRTY_FROM_NAME(ANCLDrone, State, this);
+}
+```
+
+| Line | What it does, and why |
+|---|---|
+| `++State.Seq` | Every change gets a new sequence number, even if the values happen to repeat |
+| `MARK_PROPERTY_DIRTY_FROM_NAME(ANCLDrone, State, this)` | Tells push model "this property changed" (`PushModel.h:454`). In C1 (push off) it does nothing useful; its cost is the same in every configuration. Forgetting it in a push configuration is the classic push-model bug: the server never sends the change (`07` S1-2) |
+| `ApplyLoadoutChange` | Four separate properties, four separate dirty marks: changing one field marks only that one. They change every 30 s; between changes a polling server compares them for nothing (H1) |
+
+### C3. `NCLProp.h` / `.cpp`
+
+Same pattern as the drone, with three differences:
+- **no movement replication** and no `DroneIndex`: props never move and are not tracked per object by the correctness measurement;
+- `SetNetUpdateFrequency(5.0f)`: a competent setting for something that changes every 20 s; 30 Hz would be a strawman for the legacy systems;
+- `ApplyToggle(int8 NewOwnerSlot)` changes all four fields and marks each dirty. The values follow simple rules (state flips, charges count down and refill, cooldown follows the state) so the change is real data, not a constant.
+
+### C4. `NCLPlayerAvatar.h` / `.cpp`
+
+| Line | What it does, and why |
+|---|---|
+| `class ANCLPlayerAvatar : public AActor` | **An actor, not a pawn** (design change in S1, `02` §13). A possessed pawn is an *autonomous proxy* on its own client, and `ReplicatedMovement` is `COND_SimulatedOrPhysics` (`ActorReplication.cpp:580`), so the player's own client would never receive its avatar's position; possession also adds controller/pawn replication the study does not need. The replication views only need a **view target** (`NetConnection.cpp:861–865`) |
+| `SetReplicatingMovement(true)`, `SetNetUpdateFrequency(30.0f)`, 150 m cull distance | Like a drone: it moves every tick |
+| `UPROPERTY(Replicated) int8 PlayerSlot` + `COND_InitialOnly` | Which player this is, sent once. Drones refer to players by slot (C2) |
+
+### C5. `NCLPlayerController.h` / `.cpp`
+
+```cpp
+void ANCLPlayerController::GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const
+{
+	if (HasAuthority())
+	{
+		if (const AActor* Target = GetViewTarget(); Target && Target != this)
+		{
+			OutLocation = Target->GetActorLocation();
+			OutRotation = Target->GetActorRotation();
+			return;
+		}
+	}
+	Super::GetPlayerViewPoint(OutLocation, OutRotation);
+}
+```
+
+| Line | What it does, and why |
+|---|---|
+| `override` of `GetPlayerViewPoint` | Every replication system asks this function where a connection is looking (`01b` #12). The engine's version answers from the camera cache that the **client** keeps updating (`PlayerController.cpp:1001–1031`); ours answers from the server's own view target, so the view is identical in every configuration and every run |
+| `HasAuthority()` | Only the server's copy of the controller changes behaviour. On a client (the S8 demo camera) the engine's normal logic still runs |
+| `if (const AActor* Target = GetViewTarget(); Target && Target != this)` | C++17 `if` with an initialiser (`04` §9): the variable exists only inside the `if`. `Target != this`: a controller with no view target set views itself; then the engine's answer is used |
+| `Super::GetPlayerViewPoint(...)` | The fallback keeps the engine's behaviour for every other case |
+| `OutRotation = Target->GetActorRotation()` | The view direction matters: legacy priority multiplies an actor behind the viewer by 0.2 or 0.4 (by distance) and one nearly straight ahead by 2 (`ActorReplication.cpp:67–88`). The workload turns each avatar to face its direction of travel every tick (C7, `LoopFacing`), so the view looks where the player walks. Before the S1 review the avatars never turned, and every view looked along +X |
+
+### C6. `NCLGameMode.h` / `.cpp`
+
+| Line | What it does, and why |
+|---|---|
+| `PlayerControllerClass = ANCLPlayerController::StaticClass();` | Every joining player gets our controller (C5) |
+| `DefaultPawnClass = nullptr;` | No pawn class: players never get a pawn |
+| `PostLogin(APlayerController* NewPlayer)` | Called on the server once a player has joined (`GameModeBase.h:326`). `Super` first (the engine's bookkeeping), then the workload spawns an avatar and `SetViewTarget(Avatar)` makes it the player's view (`PlayerController.h:2154`) |
+| `Logout(AController* Exiting)` | Frees the avatar before `Super` forgets the player (`GameModeBase.h:342`) |
+| `RestartPlayer(AController*) override {}` | The engine calls this to (re)spawn a player's pawn (`GameModeBase.h:435`). With no pawn class it would try and fail; the empty override says plainly that there is nothing to spawn. The parameter name is commented out because it is unused |
+| `GetWorld()->GetSubsystem<UNCLWorkloadSubsystem>()` | World subsystems are found by class from the world. It can be null in a world type the subsystem does not support, hence the `if` |
+| `Config\DefaultEngine.ini`: `GlobalDefaultGameMode` and `GlobalDefaultServerGameMode = /Script/NetCostLab.NCLGameMode` | The game mode used when the map does not name one (`GameMapsSettings.h:216–223`); the engine template map does not (the probe logs showed the default `GameModeBase`). The server line is for dedicated servers; both are set so the editor's PIE and the server behave alike |
+
+### C7. `NCLWorkloadSubsystem.h` / `.cpp`: the workload
+
+**The shape.** A `UTickableWorldSubsystem` (`06` §7): one per game world, ticked once per frame after the actor ticks. `Initialize` reads the command line, `OnWorldBeginPlay` spawns everything on the server, `Tick` moves and changes it.
+
+| Piece | What it does, and why |
+|---|---|
+| `namespace NCLWorkload { constexpr … }` | Every workload number in one place, named, with its reason: a 200 m arena; drone loops 5–30 m at 4–6 m/s; a state change every 2 s per drone with a 25% chance to attack; loadout every 30 s; props every 20 s; avatars 20–80 m loops at 3 m/s. `constexpr` makes them compile-time constants (`04` §8) |
+| `struct FLoop` | A circle: centre, radius, angular speed (sign = direction), phase. Public, so tests can build one |
+| `struct FSettings` + `ReadSettings()`, called from `Initialize` | The command-line values (`-NCLSeed=`, `-NCLDrones=`, `-NCLProps=`, `-NCLCountLog=`), read once with `FParse::Value` (`06` §10). Drones are clamped to `MAX_int16`, because `DroneIndex` is an `int16`. Read in `Initialize` (when the world creates its subsystems), not at begin play: in a standalone or listen-server world the host's player logs in, and `AddPlayer` needs the seed, before the world begins play (`UnrealEngine.cpp:16646` vs `:16660`; found by the S1 review) |
+| `static FPlan MakePlan(const FSettings&)` | **Pure:** from the seed alone it produces every drone loop, every prop position and the workload hash. No world, no actors, so the automation tests (C8) can call it. `FRandomStream Placement(Seed)` (`06` §10) gives the same numbers for the same seed on every machine and build |
+| `Loop.AngularSpeed = Direction * Speed / Loop.Radius` | Speed along the circle = angular speed × radius, so dividing turns the drawn speed (cm/s) into rad/s. Half the drones turn the other way |
+| `CentreLimit = ArenaHalfExtent - Loop.Radius` | The whole circle stays inside the arena; the test checks it |
+| Props: `GridColumns = ceil(sqrt(N))`, cell centre plus ±1.5 m jitter | An even spread over the arena (28 × 28 cells for 768 props), not perfectly regular |
+| `FCrc::TypeCrc32(…, Hash)` | Folds every generated number into one 32-bit CRC. Equal hashes mean equal workloads (SC1); logged as `NCL workload: … hash=0x…` |
+| `OnWorldBeginPlay` → `SpawnWorkload` only if `GetNetMode() != NM_Client` | Clients get the actors by replication; spawning them there too would duplicate them. Runs before any actor's `BeginPlay` (P01 verified the order), so the workload exists before the first player joins |
+| `SpawnActor<ANCLDrone>(…, FTransform(LoopPosition(Loop, Now)), SpawnParams)` | Spawned directly at its loop position. `AlwaysSpawn` skips the collision check (the actors have no collision, and a failed spawn would change the workload) |
+| `Drone->SetDroneIndex(Index)` right after spawn | Before the drone's first replication, so the initial-only property is in its first bunch |
+| `enum class EStream` + `static MakeStream(Seed, Kind, Index, Number)` | **One random stream per event.** The stream's seed is a CRC of the run's seed, the kind of event (drone state, drone loadout, prop toggle, avatar loop), the object's index and the event's number (0, 1, 2, …). The values of drone 17's sixth state change are then the same in every run and configuration, whatever happened before it in the tick. The first version kept one stateful stream per drone, shared by its state and loadout changes, and one stream for all props; the S1 review showed that two changes falling due in the same tick in one run and in two ticks in another drew in a different order and diverged from there (`07` S1-4). The CRC also replaces `Seed * 7919 + Index`, which overflowed `int32` (undefined behaviour) for seeds above about 271,000 |
+| `struct FSchedule { NextTime, Count }` | One recurring change of one object: when it is next due and how many times it has happened (the `Number` of its next stream) |
+| `StateSchedules.Add({Now + Period × (Index + 0.5) / N, 0})` | Spreads the drones evenly over each 2 s period: about 4 changes per tick instead of 256 at once every 2 s. A burst would mix "change cost" into the per-tick measurement. `{…, 0}` is aggregate initialisation (`04` §13) |
+| `ApplyDroneChange(Drone, Index, Number)`: three draws (`FRand`, `FRand`, `RandRange`) | Even when the drone does not attack, the target fraction is still drawn, so the same draw answers the same question in every run; the fraction is turned into a player slot (`OccupiedSlotAt`) only for an attack. The slot is a fraction of the players connected **now**: it is the same in every configuration once all N players have joined (the warm-up). The drone comes in as a reference: the `Tick` loop already read it from `Drones` once |
+| `OccupiedSlotAt(float Fraction)` | Picks the k-th occupied player slot, k = ⌊Fraction × occupied⌋. Uniform over the players actually connected; −1 if none |
+| `Tick`: `SetActorLocation(LoopPosition(Loop, Now))` | Position is a function of the server's world time, not an accumulated sum: no drift, and the S3 measurement can recompute the true position for any instant |
+| `static LoopFacing(Loop, Time)` | The derivative of `LoopPosition`, (−ω sin θ, ω cos θ, 0), turned into a yaw with `FVector::ToOrientationRotator()`: the direction of travel, for either sign of ω. Avatars use `SetActorLocationAndRotation(LoopPosition, LoopFacing)` |
+| `if (const int32 Number = TakeDue(Schedule, Now, Period); Number != INDEX_NONE)` | `TakeDue` returns the change's number and moves `NextTime` one period on **from its due time**, so the schedule keeps its phase. At most one change per object per tick: after a hitch an object that missed k changes catches up over k ticks instead of applying them at once. What it does **not** prevent (the S1 review corrected the comment): after a 1 s hitch about 30 ticks' worth of drones are all due, so the next tick applies about 128 changes. That burst is real and the server CSV shows it; S2 flags long frames |
+| `AddPlayer`: the lowest free slot, `MAX_int8` limit | Slots are reused after a player leaves, so slot numbers stay small. `int8` caps the study at 128 players, far above the 32 we run |
+| `MakeAvatarLoop(Seed, Slot)` | Its own stream per slot (`MakeStream(Seed, AvatarLoop, Slot, 0)`): player 7's path is the same in an 8-player and a 32-player run |
+| `AvatarOwners` as `TWeakObjectPtr<AController>` | We need to find a leaving player's slot, but the controller belongs to the game mode; a weak pointer never keeps it alive and becomes null if it is destroyed (`06` §9) |
+| `LogCounts()` with `TActorIterator<ANCLDrone>` | Counts the actors that exist in **this** world (on a client: what has arrived by replication). Only with `-NCLCountLog=SEC`, so normal runs pay nothing |
+| `UPROPERTY(Transient) TArray<TObjectPtr<…>>` | The garbage collector sees these references (`06` §8). `Transient`: never saved |
+| `GetStatId()` with `RETURN_QUICK_DECLARE_CYCLE_STAT` | Every tickable object must name a stat for the profiler (`Tickable.h:125`) |
+| `DoesSupportWorldType`: Game and PIE | Never in the editor's own world, where nothing should spawn |
+
+### C8. `Private\Tests\NCLWorkloadTests.cpp`
+
+| Test | What it checks |
+|---|---|
+| `NetCostLab.Workload.PlanIsDeterministic` | Seed 1 twice gives the same hash, bit-identical loops (`FLoop`'s defaulted `==`, `04` §15) and identical prop positions; seed 2 gives a different hash; 256 drones and 768 props |
+| `NetCostLab.Workload.PlanStaysInArena` | No drone loop leaves the 200 m arena; every drone speed is within 4–6 m/s; no prop is outside; 32 avatar loops are deterministic and inside |
+| `NetCostLab.Workload.LoopMotionMatchesSpeed` | `LoopPosition` starts at the phase angle, keeps the centre's height, moves 5 m/s over one 30 Hz tick, and returns to the start after one period. `LoopFacing` points along the motion (dot product > 0.9999 with the next 0.1 ms step) for both directions of travel, with no pitch or roll |
+| `NetCostLab.Workload.ChangeStreamsArePure` | `MakeStream` with the same key gives the same first three values; changing any one of seed, kind, object or change number changes them; `MAX_int32` as the seed works |
+| `NetCostLab.Workload.ScheduleKeepsPhase` | `TakeDue`: not due before its time; the first change is number 0; the next time is a period after the due time, not after "now"; never twice in one tick; after a 5 s hitch, the two missed changes come on two consecutive ticks; the count is 3 |
+
+`IMPLEMENT_SIMPLE_AUTOMATION_TEST(Class, "Name", Flags)` declares a test class and registers it under its dotted name (`06` §11); `Flags` = editor and client contexts, one filter flag. `TestTrue` is used for the `uint32` hash comparisons because `TestEqual` has `int32`, `int64` and `SIZE_T` overloads and a `uint32` would be ambiguous (`AutomationTest.h:1985–1987`). Tests run headless in the editor binary through `Tools\run_tests.bat`.
+
+### C9. Tools added or changed in S1
+
+| File | What changed, and why |
+|---|---|
+| `Tools\run_tests.bat [Filter] [LogPath]` | Runs `Automation RunTests <Filter>; Quit` in the editor binary, headless. The log goes to `LogPath`, **relative to `Tools\`** (default `..\NetCostLab\Saved\Logs\Tests.log`). Relative, because `cmd /c` strips the first and last quote of a command line that holds more than one quoted argument, and every absolute path here contains the space of `UNREAL PORTFOLIO` (`07` S1-15). The editor's own exit code is the verdict: non-zero if no test matched or any test reported an error (`AutomationCommandline.cpp:346–355, 493–504`). Adapted from P01 |
+| `Tools\check_job.py` | One queue job per Phase 5 step: `--build`, `--tests FILTER`, `--package`, `--smoke`, `--probe "ARGS"` (repeatable), always in that order, stopping at the first failure. Reuses `foundation_job.run_step`, `TOOLS` and `PY`, and `netlab_env`'s batch helpers. After the S1 review: the test step passes `run_tests.bat` a log path inside the fresh batch folder (`tests_editor.log`, given relative to `Tools\`), so an old run's log can never be read, and records each test's result in the manifest (from the editor's "Test Completed. Result={…}" lines); `--probe` strings are split by `split_args` (whitespace outside double quotes), because `shlex` would eat the backslashes of a Windows path |
+| `Tools\probe_net.py` | New setup `legacy` (C1, push off); `--extra=ARGS` (added to server and clients; an `--extra` value starting with `-` must use the `=` form); `--hold SEC`; evidence patterns for our `NCL workload`, `NCL player joined/left` and `NCL counts` lines (the last four count lines are kept: the pattern is one constant, `COUNTS`, used in both lists). The switches shared by server and clients are built once (`tail`) |
+| `Tools\netlab_env.py` (S1 simplify pass) | `ENGINE` (the engine string every manifest records), `RAW_DIR`, `new_batch(label)` (batch name and its git-ignored folder) and `write_manifest(batch, manifest)` (sanitised JSON). `foundation_job.py`, `probe_net.py` and `check_job.py` each had their own copy of these lines |

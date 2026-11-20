@@ -12,6 +12,8 @@ instruction (engine start-up included), then re-pins itself for the next kind of
 started directly with Popen, so its own exit code is visible. The mask each child got is read back and recorded.
 """
 import ctypes
+import datetime as dt
+import json
 import os
 import re
 import struct
@@ -24,6 +26,8 @@ EDITOR_CMD = os.path.join(UE_ROOT, r"Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
 BUILD_BAT = os.path.join(UE_ROOT, r"Engine\Build\BatchFiles\Build.bat")
 P05_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(P05_ROOT, "NetCostLab", "NetCostLab.uproject")
+ENGINE = "UE 5.8.4 (CL 58902052), launcher build"
+RAW_DIR = os.path.join(P05_ROOT, "Benchmarks", "Raw")
 
 KERNEL32 = None
 if sys.platform == "win32":
@@ -145,6 +149,22 @@ def sanitize(text: str) -> str:
         if len(name) >= 3:
             text = re.sub(rf"(?i)\b{re.escape(name)}\b", placeholder, text)
     return text
+
+
+def new_batch(label: str) -> tuple[str, str]:
+    """A batch name (date, time, label) and its folder Benchmarks/Raw/<batch>/ (git-ignored: full logs), created."""
+    batch = dt.datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_" + label
+    out_dir = os.path.join(RAW_DIR, batch)
+    os.makedirs(out_dir, exist_ok=True)
+    return batch, out_dir
+
+
+def write_manifest(batch: str, manifest: dict) -> str:
+    """Writes Benchmarks/Raw/<batch>_manifest.json (committed), passed through sanitize(); returns its path."""
+    path = os.path.join(RAW_DIR, f"{batch}_manifest.json")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(sanitize(json.dumps(manifest, indent=2)))
+    return path
 
 
 def wait_for_text(path: str, needle: str, timeout: float, count: int = 1) -> bool:

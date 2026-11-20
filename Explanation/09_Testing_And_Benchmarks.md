@@ -46,3 +46,66 @@ Affinity in every networked step, read back from Windows per process: server `0x
 **Decision from F4 (recorded in `02` §7 and `01` §7.1):** the benchmark **clients are the packaged Development game** (`Build\Windows\NetCostLab\Binaries\Win64\NetCostLab.exe -nullrhi`). Measured per-process memory makes 32 of them feasible: at most ≈ 32 × 0.54 GB ≈ 17 GB (the largest value seen, Iris before the fix), versus ≈ 57 GB for editor-binary clients. The server stays the editor binary for all five configurations. These are idle start-up numbers with an empty map; S4 measures memory and client frame rate with the real workload at N = 32.
 
 **What Phase 4 taught us:** run the engine before trusting a reading of it. The source predicted every limit correctly, but only a run showed the Iris sub-object-list requirement; finding it here, before any workload code, kept it out of the baselines.
+
+---
+
+## Phase 5 · Step S1: the workload (2026-11-21)
+
+**How it ran:** one queue job (`20261121_031018_539526`, 210.5 s, exit 0) started by `Tools\check_job.py`, which runs the requested steps in order and stops at the first failure:
+
+```
+python -I -u Tools\check_job.py --label s1 --build --tests NetCostLab.Workload --package
+    --probe "--client packaged --setups legacy,iris --skip-server-target --label s1a --extra=-NCLCountLog=5 --hold 20"
+    --probe "--client packaged --setups legacy --skip-server-target --label s1b --extra=-NCLCountLog=5 --hold 20"
+```
+
+Manifests in `Benchmarks\Raw\`: `2026-11-21_032353_s1_manifest.json` (steps), `2026-11-21_032536_s1a_manifest.json` (C1 and C4), `2026-11-21_032648_s1b_manifest.json` (C1 again). `legacy` in the probe is C1 (push off), `iris` is C4. Every networked process was pinned before launch and its mask read back: server `0xFFFF`, both clients `0xFF0000`, in all three setups.
+
+| # | Check | Result |
+|---|---|---|
+| S1-a | Editor target builds | ✅ 11.8 s, 16 actions (the game module's sources and generated code; the plugin module was recompiled with it); **0 errors, 0 warnings** |
+| S1-b | Game target builds | ✅ 14.3 s; **0 errors, 0 warnings** |
+| S1-c | Automation tests `NetCostLab.Workload` (headless editor, `Tools\run_tests.bat`) | ✅ **3 of 3 passed**: `LoopMotionMatchesSpeed`, `PlanIsDeterministic`, `PlanStaysInArena` (`Saved\Logs\Tests.log`: "Test Completed. Result={Success}" for each; "TEST COMPLETE. EXIT CODE: 0") |
+| S1-d | Package (Development) | ✅ 59.8 s; cook "Success - 0 error(s), 0 warning(s)"; BUILD SUCCESSFUL |
+| S1-e | **Workload on server and clients**, C1 and C4, `-NCLCountLog=5`, 20 s with both clients connected | ✅ Server, every sample: `netmode=1 drones=256 props=768 avatars=2`. Clients (`netmode=3`), 6–7 samples each: the first (0 actors) is taken while the map loads; then the counts **ramp up for about 10–15 s** (e.g. props 707 → 741 → 758 → 764) while the initial state of 1,026 actors arrives at the engine's default 100 kB/s per client (`MaxClientRate=100000`, `BaseEngine.ini:1860`); then they **plateau at drones 256, avatars 2, and props 764 for one client and 768 for the other, in all three setups**. The plateau is relevancy, not loss: the cull distance is 150 m and the arena is 200 m square (diagonal 283 m), so props far from one avatar's loop are correctly not replicated (`07` S1-11; the 03 criterion was corrected). One C4 client's last sample is 762: Iris drops an actor as soon as it leaves the cull radius, while legacy keeps its channel for `RelevantTimeout` = 5 s (`BaseEngine.ini:1864`, `NetDriver.cpp:5773`). In the C1 repeat, one client's last sample shows `avatars=1`: the other client had already disconnected. **Consequence for S2/S4:** the 20 s warm-up must cover this ramp at every N; S4 checks it |
+| S1-f | **Workload hash** | ✅ `seed=1 drones=256 props=768 hash=0x680F4C7A` on the server in all three setups (two C1 runs and the C4 run) |
+| S1-g | **Errors and warnings** | ✅ **0 error lines** in all nine logs; **0 `LogNetCostLab` warnings or errors**. Server warnings: the 21 engine-side `LogEditorDataStorageUI` lines (P2-1f), plus 1 Iris late-module warning in C4. Clients: 0 warnings in C1; 3 Iris late-module warnings per client in C4. Which modules load late (P2-1f asked): on the server, the six engine tool modules `AutomationWorker`, `AutomationController`, `SequenceRecorder`, `SequenceRecorderSections`, `CollisionAnalyzer` and `PerfCounters` (count 108 → 114, matching six `InternalLoadLibrary` lines), all loaded at the end of engine start-up after the map's net driver exists. `NetCostLab` and `NetCostLabCore` load earlier (before the replication system is created). The packaged client is monolithic and does not log module loads; its count goes 93 → 97 in three steps. None of these modules registers a net serializer of this project |
+| S1-h | Join time and memory | Server listening after 8.5–9.6 s; both clients joined by 10.8–12.2 s. Working set: packaged client 353–369 MB, editor-binary server 1.55 GB, now with the 1,026 replicated actors |
+
+**S1-i · Re-check after the review and simplify fixes** (same command, labels `s1r` and `s1r2`):
+
+| Attempt | Result |
+|---|---|
+| Queue job `20261121_035311_fabc5c` (batch `2026-11-21_041253_s1r`) | Editor target ✅ 14.3 s, 10 actions (every changed `.cpp`, the tests and the generated code); game target ✅ 15.9 s; **0 errors, 0 warnings** on both, with the final S1 source. ❌ **Tests step failed in 0.0 s:** `'D:\UNREAL' is not recognized as an internal or external command`. The new log-path argument made the command line hold two quoted paths with spaces, and `cmd /c` then strips the first and last quote (`07` S1-15). The step failed, as it should, and everything after it was skipped. Fix: the log path is passed relative to `Tools\` |
+| Queue job `20261121_041433_e65442` (batches `2026-11-21_050006_s1r2`, `…_050124_s1r2a`, `…_050237_s1r2b`), 186.4 s, exit 0 | Both targets up to date (1.1 s each: no source changed since the attempt above). ✅ **5 of 5 tests passed**, recorded per test in the manifest: `ChangeStreamsArePure`, `LoopMotionMatchesSpeed`, `PlanIsDeterministic`, `PlanStaysInArena`, `ScheduleKeepsPhase`. Package ✅ 58.8 s, 0 errors, 0 warnings. C1, C4 and C1 again: hash `0x680F4C7A` in all three (the plan is unchanged; only the change streams and avatar loops are now drawn per event). Clients, after the map loads (the first one or two samples are 0): drones 253–256, props 733–761, both avatars. The numbers moved because the avatars now follow different loops (their stream changed), and relevancy follows the avatars; C1 and C4 show the same ranges. 0 error lines in all nine logs, 0 `LogNetCostLab` warnings; warnings as before (21 engine-side on the editor-binary server, the Iris late-module warning in C4). Masks: server `0xFFFF`, clients `0xFF0000`, in every setup |
+
+**Audit trail for S1** (after the first job; the fixes were re-checked by S1-i):
+- `code-review` (medium) raised 6 findings: 2 important, 4 nits. All fixed:
+  - **important:** the settings were read at begin play, but in a standalone or listen-server world the host logs in first (`UnrealEngine.cpp:16646` vs `:16660`), so its avatar ignored `-NCLSeed`. They are now read in `Initialize` (`07` S1-12).
+  - **important:** the draw order depended on tick timing. A drone's state and loadout changes shared one stateful stream, and all props shared another. Two changes that fell due in one tick in one run and in two ticks in another drew in a different order, and every later value differed. Every event now has its own stream, `MakeStream(seed, kind, object, event number)`, tested by `ChangeStreamsArePure` (`07` S1-4).
+  - **nit:** the comment claimed a hitch never causes a burst. It does: about 30 ticks' worth of objects become due at once. The comment and `07` S1-7 were corrected, and the schedule is tested by `ScheduleKeepsPhase`.
+  - **nit:** `Seed * 104729` overflowed `int32`, which is undefined behaviour. It disappeared with the CRC-mixed stream seed.
+  - **nit:** avatars never turned, so every view looked along +X, and legacy priority depends on the view direction. Avatars now face their direction of travel (`LoopFacing`, tested; `07` S1-13).
+  - **nit:** `check_job.py` split `--probe` strings with `shlex`, which drops backslashes. It now uses `split_args` (`07` S1-14).
+- `simplify` (4 parallel read-only reviews: reuse, simplification, efficiency, altitude). Applied:
+  - the cull distance is one constant, `NCLNet::CullDistance` (`NCLNet.h`), instead of three literals;
+  - removed the unused `HasWorkload`, `GetDrones` and `GetAvatars`, and the `bSpawned` flag (the loops over empty arrays already do nothing);
+  - the arena size is a `static constexpr` member instead of a getter plus a namespace copy;
+  - `FLoop` has a defaulted `operator==`, so the test compares whole arrays;
+  - an avatar loop is computed once per slot;
+  - `Algo::CountIf` in `OccupiedSlotAt`, which now runs only for an attack (the fraction is still drawn, so the draws do not change);
+  - each actor pointer is read once per tick;
+  - a prop's schedule is checked before the prop itself;
+  - shared `ENGINE`, `new_batch` and `write_manifest` in `netlab_env.py`, used by `foundation_job.py`, `probe_net.py` and `check_job.py` instead of three copies;
+  - `check_job.py` reuses `foundation_job.TOOLS`/`PY` and passes `run_tests.bat` a log path inside the fresh batch folder. This removes the stale-log delete and copy, and the exit-code override, because the editor already exits non-zero when no test matches or one fails (`AutomationCommandline.cpp:346–355, 493–504`);
+  - `probe_net.py` builds the shared switches once, and the count pattern is one constant.
+- Skipped, with reasons:
+  - `COMPARE_ASSIGN_AND_MARK_PROPERTY_DIRTY` (`PushModel.h:466`): it skips the dirty mark when a draw repeats the old value. That changes what is marked dirty, which H1 measures; the setters stay explicit.
+  - The engine's `index.json` report instead of the log lines: the log is per run in the batch folder now, and the report folder is shared.
+  - A common base class for the three actor types: one shared constant removes the drift risk; the rest is four lines per constructor.
+  - `IndexOfByKey` in `RemovePlayer`: the lambda is `04` §10's example; same cost.
+  - Building both targets in one UBT call, or dropping `build_game` when packaging: the separate build steps are the 0-warning gate for each target; the packaging rebuild is an up-to-date check.
+  - Engine arguments after `--` in `probe_net.py`: the `--extra=` form works and is documented; changing the interface buys nothing in S1.
+  - Computing the angle once for position and facing: at most 32 avatars.
+
+**What S1 taught us:** the first expectation that failed was ours. "Every client sees every prop" ignored the cull distance that 01 §6.1 itself sets; the plateau counts are the relevancy rule giving the same result per client in C1 and C4.

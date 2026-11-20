@@ -1,6 +1,6 @@
 # 06 · Unreal APIs And Macros: NetCostLab
 
-**Rule:** only APIs this project actually uses, each in the same eight points: 1 what it is · 2 why it exists · 3 how it works · 4 when to use it · 5 when not to · 6 common mistakes · 7 a small example · 8 how this project uses it. Every engine claim is checked in the UE 5.8.4 source. Current to **Phase 4**; Phase 5 adds the replication, Iris and gameplay APIs step by step.
+**Rule:** only APIs this project actually uses, each in the same eight points: 1 what it is · 2 why it exists · 3 how it works · 4 when to use it · 5 when not to · 6 common mistakes · 7 a small example · 8 how this project uses it. Every engine claim is checked in the UE 5.8.4 source. Current to **Phase 5, step S1**; later steps add their APIs.
 
 | # | API | First used in |
 |---|---|---|
@@ -90,3 +90,150 @@
 6. **Common mistakes:** giving `-UseIrisReplication` to only one side (F4); quoting: a value with spaces must be quoted for the Windows command line; cheat cvars cannot be set through `-dpcvars` (P01 `01b` #11).
 7. **Example:** `UnrealEditor-Cmd.exe NetCostLab.uproject /Engine/Maps/Templates/Template_Default -server -UseIrisReplication=1 -dpcvars=Net.IsPushModelEnabled=1 -abslog=D:\logs\server.log`
 8. **In this project:** `Tools\probe_net.py` (Phase 2 probe and Phase 4 check F4) and, from S2, `Tools\run_bench.py` build every command line from one configuration table.
+
+---
+
+## APIs added in step S1 (the workload)
+
+## 6. `UCLASS` / `USTRUCT` / `UPROPERTY` / `GENERATED_BODY`
+
+1. **What:** markers that UnrealHeaderTool reads before the C++ compiler runs; it generates the reflection code (`*.generated.h`) that `GENERATED_BODY()` pulls in.
+2. **Why:** Unreal's garbage collector, serialisation, Blueprint and **replication** all work from reflection data, not from C++ types.
+3. **How:** `UCLASS()` / `USTRUCT()` register the type; each `UPROPERTY()` member gets a property descriptor; `Replicated` / `ReplicatedUsing=` mark it for replication. Fixed-width integers (`uint8`, `int8`, `uint16`, `int16`, `int32`) are all supported property types.
+4. **When:** any type or member the engine must see: replicated fields, object references the GC must follow.
+5. **When not:** plain data the engine never needs to see (our `FLoop`, `FPlan`): no reflection, no generated code.
+6. **Mistakes:** a member without `UPROPERTY()` inside a replicated struct is silently not replicated; a `Replicated` property not registered in `GetLifetimeReplicatedProps` is reported at start-up.
+7. **Example:** `UPROPERTY(Replicated) int32 Ammo = 30;`
+8. **Here:** `FNCLDroneState` (one replicated struct), the drone/prop/avatar fields, and the subsystem's `TArray<TObjectPtr<…>>` arrays.
+
+## 7. `UWorldSubsystem` / `UTickableWorldSubsystem`
+
+1. **What:** an object the engine creates automatically for each world, with the world's lifetime; the tickable variant also ticks once per frame.
+2. **Why:** world-wide systems without a placed manager actor.
+3. **How:** `DoesSupportWorldType` (`Subsystems/WorldSubsystem.h:66`) filters world types; `OnWorldBeginPlay(UWorld&)` (`:43`) runs before any actor's `BeginPlay`; the tick is "conditional" (`IsTickable()`, `Tickable.h:114`) and runs after the actor tick groups (P01 `01b` §2); `GetStatId` is pure virtual (`WorldSubsystem.h:92`).
+4. **When:** one coordinating object per world (our workload, later the director).
+5. **When not:** per-actor behaviour (use components) or state that must outlive a world (game-instance subsystem).
+6. **Mistakes:** assuming `Super::Tick` does work (it only asserts the subsystem is initialised, `WorldSubsystem.cpp:89–92`; we call it anyway, as the base class expects); spawning in `Initialize` instead of `OnWorldBeginPlay` (the world is not ready); the opposite for settings: reading them only in `OnWorldBeginPlay`, although in a standalone or listen-server world the host player logs in before the world begins play (`UnrealEngine.cpp:16646` vs `:16660`); so `Initialize(FSubsystemCollectionBase&)` (`WorldSubsystem.h:96`, call `Super` first) reads the command line and `OnWorldBeginPlay` spawns; creating it in editor worlds.
+7. **Example:** `GetWorld()->GetSubsystem<UNCLWorkloadSubsystem>()`.
+8. **Here:** `UNCLWorkloadSubsystem`; the game mode finds it by class.
+
+## 8. `TObjectPtr` and `UPROPERTY` object references
+
+1. **What:** `TObjectPtr<T>` is the engine's wrapper for a pointer to a UObject held in a `UPROPERTY`.
+2. **Why:** the garbage collector only follows references it can see through reflection.
+3. **How:** a `UPROPERTY() TArray<TObjectPtr<ANCLDrone>>` is a GC root path: the drones are not collected while the array holds them; a destroyed actor's entry becomes invalid, which `IsValid()` detects.
+4. **When:** every UObject pointer stored in a UObject member.
+5. **When not:** local variables and function parameters (raw pointers are fine there).
+6. **Mistakes:** storing UObject pointers in a non-`UPROPERTY` container (they dangle after GC); using a destroyed actor without `IsValid()`.
+7. **Example:** `UPROPERTY(Transient) TArray<TObjectPtr<ANCLDrone>> Drones;`
+8. **Here:** the workload's `Drones`, `Props`, `Avatars`; every use checks `IsValid`.
+
+## 9. `TWeakObjectPtr`
+
+1. **What:** a pointer to a UObject that does **not** keep it alive and turns null when it is destroyed.
+2. **Why:** to remember an object owned by someone else.
+3. **How:** stores an object index and serial number; `Get()` returns null once the object is gone.
+4. **When:** back-references to objects whose lifetime we do not own (the game mode owns player controllers).
+5. **When not:** objects we own and must keep (use `TObjectPtr` in a `UPROPERTY`).
+6. **Mistakes:** comparing it to a raw pointer without `Get()`; assuming it is still valid one frame later.
+7. **Example:** `TWeakObjectPtr<AController> Owner = Player; if (Owner.Get() == Exiting) …`
+8. **Here:** `UNCLWorkloadSubsystem::AvatarOwners`.
+
+## 10. `FRandomStream`, `FParse::Value`, `FCrc::TypeCrc32`
+
+1. **What:** a seeded pseudo-random generator; a command-line value parser; a CRC-32 over any trivially copyable value.
+2. **Why:** reproducible workloads, run settings from the command line, and a cheap identity check for "same workload".
+3. **How:** `FRandomStream(int32 Seed)` (`Math/RandomStream.h:40`) gives the same sequence on every machine; `FRand()`, `RandRange(Min, Max)` and `FRandRange(Min, Max)` are `const` (the state is `mutable`); `FParse::Value(CommandLine, TEXT("NCLSeed="), Out)` leaves `Out` unchanged if the key is missing; `FCrc::TypeCrc32(Value, Crc)` (`Misc/Crc.h:36`) folds a value's bytes into a running CRC.
+4. **When:** anything that must be identical between runs.
+5. **When not:** `FMath::Rand()` (global state, shared with everything else) for workload decisions.
+6. **Mistakes:** one shared stream for everything (a change in one consumer shifts every other); even one stateful stream per object, if two kinds of change share it: when both fall due in one tick in one run and in two ticks in another, they draw in a different order (the S1 review found this in our first version); a different number of draws on different paths (our drone change always draws three values); deriving a seed by multiplying `int32`s (`Seed * 104729` overflows, which is undefined behaviour).
+7. **Example:** `const FRandomStream Stream = MakeStream(Seed, EStream::AvatarLoop, Slot, 0); const double R = Stream.FRandRange(2000.0, 8000.0);` where `MakeStream` seeds the stream with a CRC chain of (seed, kind, index, event number).
+8. **Here:** `MakePlan` (one placement stream); one stream **per event** for drone state and loadout changes, prop toggles and avatar loops (`MakeStream`); the workload hash.
+
+## 11. Automation tests: `IMPLEMENT_SIMPLE_AUTOMATION_TEST`
+
+1. **What:** a macro that declares and registers a test class with a dotted name.
+2. **Why:** tests run in the engine (headless) and report pass/fail to the command line.
+3. **How:** `IMPLEMENT_SIMPLE_AUTOMATION_TEST(Class, "Name", Flags)` (`Misc/AutomationTest.h:4297`); `RunTest` uses `TestTrue`/`TestEqual`; flags need exactly one filter flag (`ProductFilter`); `WITH_DEV_AUTOMATION_TESTS` compiles them out of Shipping.
+4. **When:** anything checkable without a running network game.
+5. **When not:** multi-process network behaviour (that is `probe_net.py`).
+6. **Mistakes:** two filter flags (registration fails); `TestEqual` with a type that has no exact overload (`uint32`: ambiguous).
+7. **Example:** `TestTrue(TEXT("same seed, same hash"), First.Hash == Second.Hash);`
+8. **Here:** `NetCostLab.Workload.*`, run by `Tools\run_tests.bat`.
+
+## 12. Replication registration: `GetLifetimeReplicatedProps`, `DOREPLIFETIME_WITH_PARAMS_FAST`, `FDoRepLifetimeParams`
+
+1. **What:** the per-class list of replicated properties and how each replicates.
+2. **Why:** the property flag says *that* a property replicates; this says *when* (condition), *how* (push-based?) and whether `OnRep` fires.
+3. **How:** `FDoRepLifetimeParams { Condition = COND_None; RepNotifyCondition = REPNOTIFY_OnChanged; bIsPushBased = false; }` (`Net/UnrealNetwork.h:134–151`); `COND_InitialOnly` sends a property in the first bunch only; `_FAST` uses the generated `ENetFields_Private` enum (`:231`). Both legacy and Iris read this list (Iris builds its replication state descriptors from it).
+4. **When:** every replicated class.
+5. **When not:** —
+6. **Mistakes:** forgetting `Super::GetLifetimeReplicatedProps` (the actor's movement stops replicating); registering a property push-based and never marking it dirty (it never updates with push on).
+7. **Example:** `DOREPLIFETIME_WITH_PARAMS_FAST(ANCLDrone, State, PushBased);`
+8. **Here:** drone, prop and avatar; everything push-based; indices and slots initial-only.
+
+## 13. Push model: `MARK_PROPERTY_DIRTY_FROM_NAME`
+
+1. **What:** tells the replication system that one property of one object changed.
+2. **Why:** so a push-model server compares only what changed (`01b` #2, #6).
+3. **How:** `MARK_PROPERTY_DIRTY_FROM_NAME(Class, Property, Object)` (`Net/Core/PushModel/PushModel.h:454`) marks the property's rep index dirty for the object's push id; with `WITH_PUSH_MODEL=0` it compiles to nothing (`:480–489`); at run time it matters only if `Net.IsPushModelEnabled` is on; Iris picks the marks up through its legacy push-model bridge (`LegacyPushModel.cpp`).
+4. **When:** after every change to a push-based property, on the server.
+5. **When not:** on clients; for properties not registered push-based.
+6. **Mistakes:** changing a field without marking it (silent missing updates, `07` S1-2); marking from a const function through a cast.
+7. **Example:** `Ammo = NewAmmo; MARK_PROPERTY_DIRTY_FROM_NAME(ANCLDrone, Ammo, this);`
+8. **Here:** every setter of the drone, prop and avatar.
+
+## 14. Actor replication setters: `SetReplicatingMovement`, `SetNetUpdateFrequency`, `SetNetCullDistanceSquared`
+
+1. **What:** the per-actor knobs: replicate the position, how often to consider the actor, how far away it stays relevant.
+2. **Why:** they decide how much each actor costs to replicate.
+3. **How:** `SetReplicatingMovement` only sets the flag (`Actor.h:4556–4557`); `SetNetUpdateFrequency` (`:4624`) replaces the deprecated public field (`:903`); `SetNetCullDistanceSquared` (`:4648`) takes the squared distance. All three systems read them (Iris and Replication Graph from the class default object, `01b` #11).
+4. **When:** in the constructor, so the class default already has them.
+5. **When not:** per frame (Replication Graph reads class defaults once: a run-time change would not reach it).
+6. **Mistakes:** passing a distance instead of its square; a 100 Hz default update rate on rarely changing actors.
+7. **Example:** `SetNetCullDistanceSquared(FMath::Square(NCLNet::CullDistance));` (15000 cm, one constant in `NCLNet.h`)
+8. **Here:** drones and avatars 30 Hz with movement, props 5 Hz without; 150 m everywhere.
+
+## 15. Game-mode and controller hooks: `PostLogin`, `Logout`, `RestartPlayer`, `SetViewTarget`, `GetPlayerViewPoint`
+
+1. **What:** the server's player life-cycle callbacks, and where a player looks.
+2. **Why:** to give each player an avatar and make it what the replication systems treat as the player's view.
+3. **How:** `PostLogin` (`GameFramework/GameModeBase.h:326`) after a player joins; `Logout` (`:342`) when it leaves; `RestartPlayer` (`:435`) is what spawns pawns; `SetViewTarget` (`PlayerController.h:2154`); `GetPlayerViewPoint` is virtual and is called by every system's view code (`01b` #12).
+4. **When:** server-side player management.
+5. **When not:** —
+6. **Mistakes:** forgetting `Super::PostLogin` (the engine's own join handling is skipped); leaving the default pawn class and getting a pawn per player anyway.
+7. **Example:** `NewPlayer->SetViewTarget(Avatar);`
+8. **Here:** `ANCLGameMode` and `ANCLPlayerController`.
+
+## 16. `UWorld::SpawnActor` with `FActorSpawnParameters`
+
+1. **What:** creates an actor in a world at a transform.
+2. **Why:** the workload is spawned by code.
+3. **How:** `SpawnActor<T>(Class, Transform, Params)`; `SpawnCollisionHandlingOverride = AlwaysSpawn` skips the collision test; on a server, a replicated actor starts replicating as it begins play (`Actor.cpp:4768`).
+4. **When:** run-time actors.
+5. **When not:** —
+6. **Mistakes:** spawning on clients what the server also spawns (duplicates); relying on a collision-checked spawn that can fail and change the workload.
+7. **Example:** `World.SpawnActor<ANCLProp>(ANCLProp::StaticClass(), FTransform(Position), SpawnParams);` and, with a rotation, `FTransform(Rotation, Location)`.
+8. **Here:** drones, props and avatars, server only. Avatars then move with `SetActorLocationAndRotation` every tick (location and facing in one call, one transform update).
+
+## 17. Log categories: `DECLARE_LOG_CATEGORY_EXTERN` / `DEFINE_LOG_CATEGORY` / `UE_LOG`
+
+1. **What:** a named log channel with a default verbosity.
+2. **Why:** our lines are recognisable and countable in every log.
+3. **How:** declared in a header, defined in one `.cpp`; `UE_LOG(LogNetCostLab, Display, TEXT("…"), …)`.
+4. **When:** module-wide logging.
+5. **When not:** per-frame logging in measured runs (it costs time).
+6. **Mistakes:** defining the category in a header (multiple definitions).
+7. **Example:** `UE_LOG(LogNetCostLab, Display, TEXT("NCL player joined: slot %d"), Slot);`
+8. **Here:** `NCLLog.h` / `NetCostLabModule.cpp`; the probe counts `LogNetCostLab: Error:` lines.
+
+## 18. `TActorIterator`
+
+1. **What:** iterates every actor of a class in a world (`EngineUtils.h`).
+2. **Why:** to count what has arrived on a client without keeping our own lists there.
+3. **How:** `for (TActorIterator<ANCLDrone> It(World); It; ++It)`; it walks the world's actor list, so it is O(actors).
+4. **When:** occasional diagnostics.
+5. **When not:** every frame in a measured run.
+6. **Mistakes:** using it per frame on large worlds.
+7. **Example:** see `UNCLWorkloadSubsystem::LogCounts`.
+8. **Here:** the optional `-NCLCountLog=SEC` counts.

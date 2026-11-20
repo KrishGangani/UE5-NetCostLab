@@ -1,0 +1,59 @@
+{
+  "batch": "2026-11-21_041253_s1r",
+  "purpose": "step checks 's1r'",
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "steps": {
+    "build_editor": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLabEditor",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 14.3,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "build_game": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLab",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 15.9,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "tests": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\run_tests.bat",
+        "NetCostLab.Workload",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_041253_s1r\\tests_editor.log"
+      ],
+      "exit_code": 1,
+      "seconds": 0.0,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": [],
+      "results": {}
+    },
+    "package": {
+      "skipped_because": "tests"
+    },
+    "probe1": {
+      "skipped_because": "tests"
+    },
+    "probe2": {
+      "skipped_because": "tests"
+    }
+  }
+}

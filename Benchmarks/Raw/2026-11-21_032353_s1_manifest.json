@@ -1,0 +1,107 @@
+{
+  "batch": "2026-11-21_032353_s1",
+  "purpose": "step checks 's1'",
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "steps": {
+    "build_editor": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLabEditor",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 11.8,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "build_game": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLab",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 14.3,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "tests": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\run_tests.bat",
+        "NetCostLab.Workload"
+      ],
+      "exit_code": 0,
+      "seconds": 17.0,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "package": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\package.bat",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 59.8,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "probe1": {
+      "command": [
+        "%USERPROFILE%\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "-I",
+        "-u",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\probe_net.py",
+        "--client",
+        "packaged",
+        "--setups",
+        "legacy,iris",
+        "--skip-server-target",
+        "--label",
+        "s1a",
+        "--extra=-NCLCountLog=5",
+        "--hold",
+        "20"
+      ],
+      "exit_code": 0,
+      "seconds": 72.4,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "probe2": {
+      "command": [
+        "%USERPROFILE%\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "-I",
+        "-u",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\probe_net.py",
+        "--client",
+        "packaged",
+        "--setups",
+        "legacy",
+        "--skip-server-target",
+        "--label",
+        "s1b",
+        "--extra=-NCLCountLog=5",
+        "--hold",
+        "20"
+      ],
+      "exit_code": 0,
+      "seconds": 35.1,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    }
+  }
+}

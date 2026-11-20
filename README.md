@@ -8,7 +8,7 @@
 
 | Phase | 1 Problem | 2 Research | 3 Architecture | 4 Foundation | 5 Implementation | 6 Explanation | 7 Testing | 8 Profiling | 9 Review | 10 Portfolio |
 |---|---|---|---|---|---|---|---|---|---|---|
-| State | ✓ | ✓ | ✓ final | ✓ | next (S1 of 8) | ongoing | — | — | — | — |
+| State | ✓ | ✓ | ✓ final | ✓ | in progress (S1 of 8 done) | ongoing | — | — | — | — |
 
 ---
 
@@ -18,7 +18,7 @@ A multiplayer server sends every replicated actor to every connection, so its CP
 
 ## Engineering approach
 
-One server-driven gameplay workload (256 drones, 768 props, 8/16/32 headless clients on one PC), run under five configurations from **one** server binary:
+One server-driven gameplay workload (256 drones, 768 props, 8/16/32 headless clients on one PC), run under six configurations from **one** server binary:
 
 | ID | Configuration |
 |---|---|
@@ -26,12 +26,13 @@ One server-driven gameplay workload (256 drones, 768 props, 8/16/32 headless cli
 | C2 | C1 + push model (`MARK_PROPERTY_DIRTY_FROM_NAME`) |
 | C3 | C2 + Replication Graph (`UBasicReplicationGraph`) |
 | C4 | Iris with its default sphere prioritiser |
-| C5 | Iris + our **gameplay-aware prioritiser**: Epic's sphere model plus a boost, for one connection only, for drones that are attacking that connection's pawn |
+| C5 | Iris + our **gameplay-aware prioritiser**: Epic's sphere model plus a boost, for one connection only, for drones that are attacking that connection's player |
+| C6 | C2 + the same focus rule in the legacy `AActor::GetNetPriority` hook: the fair existing-solution comparison for C5 |
 
 Measured: server ms per net tick, bytes/s per client, scaling slopes over 8/16/32 clients, and correctness (position error, state staleness, final mismatches) under a bandwidth cap and 0/1/3/5% emulated loss, on a clock shared by all processes. Details: [Explanation/02_System_Architecture.md](Explanation/02_System_Architecture.md).
 
 **What Phase 2 changed (honestly):**
-- **The launcher engine cannot build a dedicated-server target, and its packaged games have no push model.** The server is therefore the editor binary in `-server` mode for all five configurations; only comparisons, not absolute server numbers, are claimed ([01b](Explanation/01b_Research_Findings.md) #1–#3).
+- **The launcher engine cannot build a dedicated-server target, and its packaged games have no push model.** The server is therefore the editor binary in `-server` mode for every configuration; only comparisons, not absolute server numbers, are claimed ([01b](Explanation/01b_Research_Findings.md) #1–#3).
 - **The comparison itself is not new:** a public UE 5.8.3 lab already compares legacy, Replication Graph and Iris with bandwidth at 8 clients, and gameplay-weighted priority has long been possible in legacy through `AActor::GetNetPriority`. The new part is a gameplay-aware **Iris** prioritiser, push model as an isolated factor, scaling slopes, and correctness under loss ([01b](Explanation/01b_Research_Findings.md) §5).
 
 ## Architecture diagram
@@ -40,7 +41,7 @@ Final (v1.0): [Explanation/02_System_Architecture.md](Explanation/02_System_Arch
 
 ## Before / after comparison
 
-*(pending, Phase 8)*. C1–C5 on the same workload; C4 vs C5 under a bandwidth cap.
+*(pending, Phase 8)*. C1–C6 on the same workload; C4 vs C5 and C2 vs C6 under a bandwidth cap.
 
 ## Benchmark results
 

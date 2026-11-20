@@ -17,7 +17,6 @@ Usage (through the queue only):
       ... probe_net.py --client packaged --setups legacy_push,iris --skip-server-target --label f4
 """
 import argparse
-import datetime as dt
 import json
 import os
 import re
@@ -35,6 +34,10 @@ COMMON = ["-log", "-unattended", "-nosplash", "-nosound", "-traceautostart=0", "
 
 # Each setup: extra arguments for server and clients, plus console commands the server prints at startup as evidence.
 SETUPS = {
+    "legacy": {                                       # C1: generic replication, push model off
+        "args": ["-UseIrisReplication=0", "-dpcvars=Net.IsPushModelEnabled=0"],
+        "server_exec": "Net.IsPushModelEnabled,net.Iris.UseIrisReplication",
+    },
     "legacy_push": {
         "args": ["-UseIrisReplication=0", "-dpcvars=Net.IsPushModelEnabled=1"],
         "server_exec": "Net.IsPushModelEnabled,net.Iris.UseIrisReplication,net.Iris.PushModelMode",
@@ -52,6 +55,7 @@ SETUPS = {
 }
 
 # Log lines kept as evidence (regex, searched in every log).
+COUNTS = r"NCL counts: .*"
 EVIDENCE = [
     r"IpNetDriver listening on port \d+",
     r"using replication model \w+",
@@ -69,7 +73,13 @@ EVIDENCE = [
     r"LogIris: .*",
     r"Iris.*mismatch.*",
     r"Fatal error.*|Assertion failed.*",
+    r"NCL workload: .*",                              # our own lines (step S1 on): the workload hash,
+    r"NCL player (joined|left): .*",                  # player slots,
+    COUNTS,                                           # and periodic counts of what exists in each world
+    r"LogNetCostLab: (Error|Warning): .*",
 ]
+# For these patterns the LAST hits matter (periodic counts), so scan() keeps the last four instead of the first four.
+KEEP_LAST = {COUNTS}
 
 
 def scan(path: str) -> dict:
@@ -88,8 +98,9 @@ def scan(path: str) -> dict:
             match = re.search(pattern, line)
             if match:
                 hits = found.setdefault(pattern, [])
-                if len(hits) < 4:
+                if len(hits) < 4 or pattern in KEEP_LAST:
                     hits.append(match.group(0).strip()[:220])
+                    del hits[:-4]
     return {"errors": errors, "warnings": warnings, "evidence": found, "lines": len(lines)}
 
 
@@ -118,7 +129,7 @@ def probe_server_target(out_dir: str) -> dict:
 
 
 def probe_setup(name: str, setup: dict, out_dir: str, server_mask: int, client_mask: int,
-                client_kind: str = "editor") -> dict:
+                client_kind: str, extra: list[str], hold: float) -> dict:
     print(f"[probe] setup {name}", flush=True)
     server_log = os.path.join(out_dir, f"{name}_server.log")
     client_logs = [os.path.join(out_dir, f"{name}_client{i}.log") for i in range(CLIENTS)]
@@ -126,15 +137,14 @@ def probe_setup(name: str, setup: dict, out_dir: str, server_mask: int, client_m
         if os.path.exists(path):
             os.remove(path)
 
-    server_args = [env.PROJECT, MAP, "-server", f"-abslog={server_log}", f"-ExecCmds={setup['server_exec']}"] \
-        + COMMON + setup["args"]
+    tail = COMMON + setup["args"] + extra              # the same switches on the server and every client
+    server_args = [env.PROJECT, MAP, "-server", f"-abslog={server_log}", f"-ExecCmds={setup['server_exec']}"] + tail
     if client_kind == "packaged":      # the real game exe (not the bootstrap); a staged build knows its own project
         client_exe = PACKAGED_CLIENT
-        client_args = [["127.0.0.1", "-nullrhi", f"-abslog={path}"] + COMMON + setup["args"] for path in client_logs]
+        client_args = [["127.0.0.1", "-nullrhi", f"-abslog={path}"] + tail for path in client_logs]
     else:                              # the editor binary in -game mode, uncooked
         client_exe = env.EDITOR_CMD
-        client_args = [[env.PROJECT, "127.0.0.1", "-game", "-nullrhi", f"-abslog={path}"] + COMMON + setup["args"]
-                       for path in client_logs]
+        client_args = [[env.PROJECT, "127.0.0.1", "-game", "-nullrhi", f"-abslog={path}"] + tail for path in client_logs]
     result = {"server_command": server_args, "client_exe": client_exe, "client_command": client_args[0], "steps": {}}
     processes, inherited_masks = [], []
     started = time.time()
@@ -154,7 +164,7 @@ def probe_setup(name: str, setup: dict, out_dir: str, server_mask: int, client_m
             result["steps"]["clients_joined"] = joined
             result["steps"]["clients_welcomed"] = welcomed
             result["steps"]["joined_s"] = round(time.time() - started, 1)
-            time.sleep(15)                                   # a short steady state with everyone connected
+            time.sleep(hold)                                 # a short steady state with everyone connected
             result["working_set_mb"] = {image: sorted(env.working_sets_mb(image), reverse=True)
                                         for image in sorted({"UnrealEditor-Cmd.exe", os.path.basename(client_exe)})}
             result["exited_early"] = [p.poll() for p in processes]     # None = still running, as it should be
@@ -178,16 +188,18 @@ def main() -> int:
     parser.add_argument("--setups", default=",".join(SETUPS))
     parser.add_argument("--skip-server-target", action="store_true")
     parser.add_argument("--label", default="probe")
+    parser.add_argument("--extra", default="", help="space-separated arguments added to server and clients")
+    parser.add_argument("--hold", type=float, default=15.0, help="seconds to stay connected before stopping")
     args = parser.parse_args()
-    batch = dt.datetime.now().strftime("%Y-%m-%d_%H%M%S") + "_" + args.label
-    raw_dir = os.path.join(env.P05_ROOT, "Benchmarks", "Raw")
-    out_dir = os.path.join(raw_dir, batch)
-    os.makedirs(out_dir, exist_ok=True)
+    extra = args.extra.split()
+    batch, out_dir = env.new_batch(args.label)
     server_mask, client_mask = env.server_and_client_masks()
     manifest = {
         "batch": batch,
-        "purpose": "Phase 2 probe P2-1: Server target, editor-binary dedicated server, headless clients, 3 setups",
-        "engine": "UE 5.8.4 (CL 58902052), launcher build",
+        "purpose": f"network check '{args.label}': editor-binary dedicated server + {CLIENTS} headless clients per setup",
+        "extra_args": extra,
+        "hold_seconds": args.hold,
+        "engine": env.ENGINE,
         "server_binary": "UnrealEditor-Cmd.exe -server (Development editor build), uncooked project",
         "client_binary": args.client,
         "map": MAP,
@@ -200,10 +212,9 @@ def main() -> int:
         manifest["server_target"] = probe_server_target(out_dir)
     manifest["setups"] = {}
     for name in args.setups.split(","):
-        manifest["setups"][name] = probe_setup(name, SETUPS[name], out_dir, server_mask, client_mask, args.client)
-    manifest_path = os.path.join(raw_dir, f"{batch}_manifest.json")
-    with open(manifest_path, "w", encoding="utf-8") as handle:
-        handle.write(env.sanitize(json.dumps(manifest, indent=2)))
+        manifest["setups"][name] = probe_setup(name, SETUPS[name], out_dir, server_mask, client_mask, args.client,
+                                                extra, args.hold)
+    manifest_path = env.write_manifest(batch, manifest)
     print(f"[probe] manifest: {manifest_path}", flush=True)
     ok = all(s["steps"].get("clients_joined") for s in manifest["setups"].values())
     return 0 if ok else 3

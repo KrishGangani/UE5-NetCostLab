@@ -96,8 +96,8 @@ When this is ignored, teams typically:
 All gameplay runs on the server. Clients send no input, so the workload does not depend on the clients.
 
 - **Arena:** 200 m × 200 m, an engine template map; everything is spawned by code from a **fixed seed**.
-- **Players:** N ∈ {8, 16, 32} headless clients. Each owns a pawn that the **server** moves along a seeded loop (radius 20–80 m, 3 m/s). The view used for relevancy and priority is that pawn, for every configuration (`02` §8).
-- **Drones:** 256 actors on seeded loops (4–6 m/s), `NetUpdateFrequency` 30 Hz, replicated movement plus gameplay state: `Health`, `Mode` (patrol/attack), `ThreatTarget` (the pawn it attacks) and four rarely changing loadout fields. Every 2 s a seeded schedule retargets some drones, so about a quarter are attacking a specific player at any moment.
+- **Players:** N ∈ {8, 16, 32} headless clients. Each has an avatar (an actor, not a possessed pawn) that the **server** moves along a seeded loop (radius 20–80 m, 3 m/s). The avatar is the player controller's view target, and the view used for relevancy and priority is that avatar, for every configuration (`02` §4.2).
+- **Drones:** 256 actors on seeded loops (4–6 m/s), `NetUpdateFrequency` 30 Hz, replicated movement plus gameplay state: `Health`, `Mode` (patrol/attack), `TargetSlot` (the player it attacks) and four rarely changing loadout fields. Every 2 s a seeded schedule retargets some drones, so about a quarter are attacking a specific player at any moment.
 - **Props:** 768 stationary interactive props (doors, pickups), four replicated fields each, `NetUpdateFrequency` 5 Hz, each toggling state on a seeded schedule about once per 20 s.
 - **Relevancy:** a 150 m cull distance for drones and props in every configuration (legacy `NetCullDistanceSquared`, `UBasicReplicationGraph` grid, Iris grid filter with exact cull distance).
 - **Server tick:** 30 Hz (`NetServerMaxTickRate`, engine default).
@@ -111,16 +111,17 @@ All gameplay runs on the server. Clients send no input, so the workload does not
 | C2 | C1 + push model (`Net.IsPushModelEnabled=1`, `net.PushModelSkipUndirtiedReplication=1`) | Epic's CPU fix for the generic path; isolates push dirtiness |
 | C3 | C2 + Replication Graph (`UBasicReplicationGraph`) | The shipped graph, out of the box. A game-specific graph could do better; we say so |
 | C4 | Iris (`-UseIrisReplication=1`) with push dirtiness, default filters and the default sphere prioritiser | Epic's new system as shipped |
-| **C5** | **C4 + our gameplay-aware prioritiser** for drones | Our contribution: the same distance model plus a boost for drones attacking the connection's own pawn |
+| **C5** | **C4 + our gameplay-aware prioritiser** for drones | Our contribution: the same distance model plus a boost for drones attacking the connection's own avatar |
+| C6 | C2 + the **same focus rule in the legacy hook**: drones override `AActor::GetNetPriority` and, for the connection whose view target they attack, return the engine's own view-target priority (`NetPriority × Time × 4`, no distance scaling: `ActorReplication.cpp:56–59`) | **The fair existing solution for C5.** Legacy has always allowed gameplay-aware priority through this virtual hook (§3); comparing C5 only with distance-only Iris would set it against a strawman. Added on the owner's decision (2026-11-21) |
 
-Each step from C1 to C5 changes **one** factor: push, then the graph, then the system, then the prioritiser. C3 → C4 changes the system (the graph is not used with Iris), so C2 is also compared with C4 directly.
+Each step from C1 to C5 changes **one** factor: push, then the graph, then the system, then the prioritiser. C3 → C4 changes the system (the graph is not used with Iris), so C2 is also compared with C4 directly. **C6 differs from C2 by one factor too (the focus rule), so C6 vs C2 and C5 vs C4 measure the same gameplay rule on both systems,** each expressed in its own system's convention (the legacy view-target ×4; Iris's owner-boost +2.0).
 
 ### 6.3 Scenarios
 
 | Scenario | Bandwidth per client | Loss | Clients | Configs | Answers |
 |---|---|---|---|---|---|
-| **A: open** | raised to 1,000,000 B/s, so nothing is capped | 0% | 8, 16, 32 | C1–C5 | CPU and bytes/s per client, scaling slopes (H1–H4) |
-| **B: capped** | 24,000 B/s (calibrated once in Phase 5 on C4, so that C4 is saturated in ≥ 90% of server frames; then frozen) | 0, 1, 3, 5% both directions | 16 | C1, C4, C5 | Who gets the bandwidth, correctness under loss (H5, H6) |
+| **A: open** | raised to 1,000,000 B/s, so nothing is capped | 0% | 8, 16, 32 | C1–C6 | CPU and bytes/s per client, scaling slopes (H1–H4) |
+| **B: capped** | 24,000 B/s (calibrated once in Phase 5 on C4, so that C4 is saturated in ≥ 90% of server frames; then frozen) | 0, 1, 3, 5% both directions | 16 | C2, C4, C5, C6 (C2 is C6's own baseline; C1 differs from C2 only in CPU, not in what is sent) | Who gets the bandwidth, correctness under loss (H5, H6) |
 
 ### 6.4 Metrics
 
@@ -135,7 +136,7 @@ Each step from C1 to C5 changes **one** factor: push, then the graph, then the s
 | Staleness of discrete state (server change → client receive) | ms | Same logs |
 | Final-state mismatches after a 5 s settle with no changes | count | End-of-run state dump on server and clients |
 
-Position error and staleness are reported separately for **threat drones** (attacking this client's pawn) and **ambient drones**.
+Position error and staleness are reported separately for **threat drones** (attacking this client's avatar) and **ambient drones**.
 
 ### 6.5 Pass/fail criteria [target]
 
@@ -143,11 +144,12 @@ Position error and staleness are reported separately for **threat drones** (atta
 |---|---|---|
 | SC1 | **Same workload everywhere** | The server's workload hash (spawn seeds plus change schedule) is identical for every configuration at a given N, and every client stays connected through every capture (0 disconnects, 0 timeouts) |
 | SC2 | **Scenario A is really uncapped** | Saturated connection-frames ≤ 1% in every Scenario A run. Otherwise bytes/s would measure the cap, and the run is invalid |
-| SC3 | **Full coverage, honest slopes** | All 15 cells (5 configs × 3 client counts) have ≥ 5 valid runs. Every slope is reported with its run-to-run range. Nothing is extrapolated beyond 32 clients |
+| SC3 | **Full coverage, honest slopes** | All 18 cells (6 configs × 3 client counts) have ≥ 6 valid runs. Every slope is reported with its run-to-run range. Nothing is extrapolated beyond 32 clients |
 | SC4 | **The prioritiser helps the objects that matter** | Scenario B, 0% loss: p95 position error of threat drones on their target's client, **C5 ≤ 0.5 × C4**, with non-overlapping run ranges. If not met, we report it and analyse why. No reframing |
 | SC5 | **The price is bounded** | Scenario B, 0% loss: p95 position error of ambient drones, **C5 ≤ 1.5 × C4** |
 | SC6 | **The prioritiser is cheap** | Scenario A, N = 32: C5 median server net-tick time ≤ C4 median **+ 5%** |
-| SC7 | **Correct under loss** | 1, 3 and 5% loss: **0** final-state mismatches in every run of C1, C4 and C5, and C5's threat-drone staleness p95 ≤ C4's at each loss level |
+| SC7 | **Correct under loss** | 1, 3 and 5% loss: **0** final-state mismatches in every run of C2, C4, C5 and C6, and C5's threat-drone staleness p95 ≤ C4's at each loss level |
+| SC8 | **The same rule on legacy, reported** | Every Scenario B cell reports C6 vs C2 on the SC4/SC5 metrics next to C5 vs C4. Not pass/fail: it answers whether the Iris prioritiser does at least what the legacy hook does, and we report the answer whichever way it falls |
 
 H1–H4 are answered with data and reported either way. They are findings about Epic's systems, not pass/fail criteria for our code.
 
@@ -164,13 +166,13 @@ The portfolio protocol is a packaged Development build, a fixed step with `-dete
 | Real GPU, windowed 1280×720 | No rendering anywhere: the server has no RHI, the clients use `-nullrhi` | Nothing measured here is rendered, and 32 rendering clients would not fit on one GPU |
 | Pin to the P-cores | **Server pinned to the P-cores** (mask `0xFFFF`), **clients pinned to the E-cores** (`0xFF0000`) | The server is what we measure; the clients must not steal its cores. Both masks go in every manifest |
 
-What stays the same: the capture window is opened and closed by the server itself (`CSV_EVENT(BenchStart)`, `-csvStartOnEvent=BenchStart -csvCaptureOnEventFrameCount=1800`). `-ExitAfterCsvProfiling` is **not** used: it would end the server the moment the capture ends (`CsvProfiler.cpp:4309–4312`), before the settle period and the state dump that SC7 needs, so the server's director ends the run itself; one discarded priming run per batch; interleaved runs with the configuration order rotated each round; runs per combination = number of configurations in that scenario (5 in A, 3 in B); median, p95 and p99 per run, then the median across runs with [min–max]; an environment record with every batch.
+What stays the same: the capture window is opened and closed by the server itself (`CSV_EVENT(BenchStart)`, `-csvStartOnEvent=BenchStart -csvCaptureOnEventFrameCount=1800`). `-ExitAfterCsvProfiling` is **not** used: it would end the server the moment the capture ends (`CsvProfiler.cpp:4309–4312`), before the settle period and the state dump that SC7 needs, so the server's director ends the run itself; one discarded priming run per batch; interleaved runs with the configuration order rotated each round; runs per combination = number of configurations in that scenario (6 in A, 4 in B); median, p95 and p99 per run, then the median across runs with [min–max]; an environment record with every batch.
 
 ### 7.2 Run shape
 
 Every run is **one queue job** that starts the server, waits until it listens, starts all N clients, waits until all N have joined, warms up for 20 s, captures 60 s (1,800 server frames), lets state settle for 5 s, then stops everything. Logs and CSVs go to `Benchmarks\Raw\`; manifests (exact command lines, environment, masks, per-run statistics) are committed.
 
-**Rough cost:** Scenario A is 75 runs + 1 priming run, Scenario B is 36 + 1, each about 3 minutes including start-up: about 6 hours, scripted and unattended, split into several queue jobs so other projects can interleave.
+**Rough cost:** Scenario A is 108 runs (6 configs × 3 N × 6) + 1 priming run, Scenario B is 64 (4 × 4 loss × 4) + 1, each about 3 minutes including start-up: about 9 hours of queue time, scripted and unattended, split into queue jobs of about 30 minutes so other projects can interleave. Every run's server and clients always run inside one job.
 
 ## 8. Limits we accept up front
 

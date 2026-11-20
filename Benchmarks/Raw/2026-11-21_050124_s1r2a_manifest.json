@@ -1,0 +1,341 @@
+{
+  "batch": "2026-11-21_050124_s1r2a",
+  "purpose": "network check 's1r2a': editor-binary dedicated server + 2 headless clients per setup",
+  "extra_args": [
+    "-NCLCountLog=5"
+  ],
+  "hold_seconds": 20.0,
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "server_binary": "UnrealEditor-Cmd.exe -server (Development editor build), uncooked project",
+  "client_binary": "packaged",
+  "map": "/Engine/Maps/Templates/Template_Default",
+  "clients": 2,
+  "affinity": {
+    "server_mask": "0xFFFF",
+    "client_mask": "0xFF0000",
+    "rule": "server on the performance cores, clients on the remaining cores"
+  },
+  "logical_cpus": 24,
+  "setups": {
+    "legacy": {
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_050124_s1r2a\\legacy_server.log",
+        "-ExecCmds=Net.IsPushModelEnabled,net.Iris.UseIrisReplication",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-dpcvars=Net.IsPushModelEnabled=0",
+        "-NCLCountLog=5"
+      ],
+      "client_exe": "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Build\\Windows\\NetCostLab\\Binaries\\Win64\\NetCostLab.exe",
+      "client_command": [
+        "127.0.0.1",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_050124_s1r2a\\legacy_client0.log",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-dpcvars=Net.IsPushModelEnabled=0",
+        "-NCLCountLog=5"
+      ],
+      "steps": {
+        "server_listening": true,
+        "server_listening_s": 9.6,
+        "clients_joined": true,
+        "clients_welcomed": true,
+        "joined_s": 14.2
+      },
+      "working_set_mb": {
+        "NetCostLab.exe": [
+          353.4,
+          353.1
+        ],
+        "UnrealEditor-Cmd.exe": [
+          1549.9
+        ]
+      },
+      "exited_early": [
+        null,
+        null,
+        null
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "server_log": {
+        "errors": 0,
+        "warnings": 21,
+        "evidence": {
+          "ReplicationDriverClass is null.*": [
+            "ReplicationDriverClass is null! Not using ReplicationDriver."
+          ],
+          "using replication model \\w+": [
+            "using replication model Generic"
+          ],
+          "IpNetDriver listening on port \\d+": [
+            "IpNetDriver listening on port 7777"
+          ],
+          "Bringing .* up for play \\(max tick rate \\d+\\)": [
+            "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 30)"
+          ],
+          "NCL workload: .*": [
+            "NCL workload: seed=1 drones=256 props=768 hash=0x680F4C7A"
+          ],
+          "NCL counts: .*": [
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2",
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2",
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2",
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2"
+          ],
+          "Net\\.IsPushModelEnabled = .*": [
+            "Net.IsPushModelEnabled = \"false\"      LastSetBy: DeviceProfile"
+          ],
+          "net\\.Iris\\.UseIrisReplication = .*": [
+            "net.Iris.UseIrisReplication = \"0\"      LastSetBy: Constructor"
+          ],
+          "NCL player (joined|left): .*": [
+            "NCL player joined: slot 0",
+            "NCL player joined: slot 1",
+            "NCL player left: slot 0",
+            "NCL player left: slot 1"
+          ],
+          "Join succeeded: .*": [
+            "Join succeeded: <host>-EA2E4E0F4FAFFC",
+            "Join succeeded: <host>-C67C4EDE4B522F"
+          ]
+        },
+        "lines": 1492
+      },
+      "client_logs": [
+        {
+          "errors": 0,
+          "warnings": 0,
+          "evidence": {
+            "using replication model \\w+": [
+              "using replication model Generic"
+            ],
+            "NCL counts: .*": [
+              "NCL counts: netmode=3 drones=255 props=746 avatars=2",
+              "NCL counts: netmode=3 drones=254 props=745 avatars=2",
+              "NCL counts: netmode=3 drones=256 props=746 avatars=2",
+              "NCL counts: netmode=3 drones=256 props=749 avatars=2"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/NetCostLab.NCLGameMode)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 771
+        },
+        {
+          "errors": 0,
+          "warnings": 0,
+          "evidence": {
+            "using replication model \\w+": [
+              "using replication model Generic"
+            ],
+            "NCL counts: .*": [
+              "NCL counts: netmode=3 drones=256 props=759 avatars=2",
+              "NCL counts: netmode=3 drones=256 props=752 avatars=2",
+              "NCL counts: netmode=3 drones=255 props=745 avatars=2",
+              "NCL counts: netmode=3 drones=256 props=739 avatars=2"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/NetCostLab.NCLGameMode)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 771
+        }
+      ],
+      "server_errors_sample": [],
+      "client0_errors_sample": []
+    },
+    "iris": {
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_050124_s1r2a\\iris_server.log",
+        "-ExecCmds=Net.IsPushModelEnabled,net.Iris.UseIrisReplication,net.Iris.PushModelMode",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=1",
+        "-dpcvars=Net.IsPushModelEnabled=1",
+        "-NCLCountLog=5"
+      ],
+      "client_exe": "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Build\\Windows\\NetCostLab\\Binaries\\Win64\\NetCostLab.exe",
+      "client_command": [
+        "127.0.0.1",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_050124_s1r2a\\iris_client0.log",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=1",
+        "-dpcvars=Net.IsPushModelEnabled=1",
+        "-NCLCountLog=5"
+      ],
+      "steps": {
+        "server_listening": true,
+        "server_listening_s": 8.6,
+        "clients_joined": true,
+        "clients_welcomed": true,
+        "joined_s": 10.9
+      },
+      "working_set_mb": {
+        "NetCostLab.exe": [
+          364.5,
+          364.2
+        ],
+        "UnrealEditor-Cmd.exe": [
+          1549.5
+        ]
+      },
+      "exited_early": [
+        null,
+        null,
+        null
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "server_log": {
+        "errors": 0,
+        "warnings": 22,
+        "evidence": {
+          "LogIris: .*": [
+            "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_0 (0x000002461AA8F1F0) is created",
+            "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+            "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 108.",
+            "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+          ],
+          "using replication model \\w+": [
+            "using replication model Iris"
+          ],
+          "IpNetDriver listening on port \\d+": [
+            "IpNetDriver listening on port 7777"
+          ],
+          "Bringing .* up for play \\(max tick rate \\d+\\)": [
+            "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 30)"
+          ],
+          "NCL workload: .*": [
+            "NCL workload: seed=1 drones=256 props=768 hash=0x680F4C7A"
+          ],
+          "NCL counts: .*": [
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2",
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2",
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2",
+            "NCL counts: netmode=1 drones=256 props=768 avatars=2"
+          ],
+          "Net\\.IsPushModelEnabled = .*": [
+            "Net.IsPushModelEnabled = \"true\"      LastSetBy: DeviceProfile"
+          ],
+          "net\\.Iris\\.UseIrisReplication = .*": [
+            "net.Iris.UseIrisReplication = \"0\"      LastSetBy: Constructor"
+          ],
+          "net\\.Iris\\.PushModelMode = .*": [
+            "net.Iris.PushModelMode = \"2\"      LastSetBy: Constructor"
+          ],
+          "NCL player (joined|left): .*": [
+            "NCL player joined: slot 0",
+            "NCL player joined: slot 1",
+            "NCL player left: slot 1",
+            "NCL player left: slot 0"
+          ],
+          "Join succeeded: .*": [
+            "Join succeeded: <host>-6DB6896049A80B",
+            "Join succeeded: <host>-EE8AA15C44020A"
+          ]
+        },
+        "lines": 1498
+      },
+      "client_logs": [
+        {
+          "errors": 0,
+          "warnings": 3,
+          "evidence": {
+            "LogIris: .*": [
+              "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_2147482458 (0x00007FE9B5AD79C0) is created",
+              "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+              "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 93.",
+              "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+            ],
+            "using replication model \\w+": [
+              "using replication model Iris"
+            ],
+            "NCL counts: .*": [
+              "NCL counts: netmode=3 drones=255 props=748 avatars=2",
+              "NCL counts: netmode=3 drones=255 props=744 avatars=2",
+              "NCL counts: netmode=3 drones=253 props=738 avatars=2",
+              "NCL counts: netmode=3 drones=253 props=733 avatars=1"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/NetCostLab.NCLGameMode)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 780
+        },
+        {
+          "errors": 0,
+          "warnings": 3,
+          "evidence": {
+            "LogIris: .*": [
+              "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_2147482458 (0x00007FEA619479C0) is created",
+              "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+              "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 93.",
+              "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+            ],
+            "using replication model \\w+": [
+              "using replication model Iris"
+            ],
+            "NCL counts: .*": [
+              "NCL counts: netmode=3 drones=255 props=739 avatars=2",
+              "NCL counts: netmode=3 drones=253 props=741 avatars=2",
+              "NCL counts: netmode=3 drones=254 props=745 avatars=2",
+              "NCL counts: netmode=3 drones=255 props=746 avatars=2"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/NetCostLab.NCLGameMode)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 779
+        }
+      ],
+      "server_errors_sample": [],
+      "client0_errors_sample": []
+    }
+  }
+}

@@ -37,7 +37,7 @@
 - The same drones, the same cap. Drones attacking you get a priority boost **for your connection only**, so they update almost every tick on your screen while other players still see them at the normal rate. The price is visible too: ambient far drones get a little staler. Both numbers are reported.
 
 **Recorded material (Phase 10):**
-- charts of server ms per net tick and bytes/s per client against client count (8/16/32) for C1–C5, with the fitted slopes;
+- charts of server ms per net tick and bytes/s per client against client count (8/16/32) for C1–C6, with the fitted slopes;
 - position-error and staleness distributions (threat vs ambient drones) for C4 and C5 at 0/1/3/5% loss;
 - a short side-by-side capture of the same client view under C4 and C5;
 - a Networking Insights walkthrough of one packet.
@@ -48,7 +48,7 @@
 2. The investigation: hypotheses H1–H6 and what the baseline captures showed for each.
 3. The launcher-engine findings that shaped the setup (no Server target, no push model in packaged games), with evidence.
 4. The architecture diagram (`02` §5) and the per-tick flow of the prioritiser.
-5. Results for all five configurations, with the full environment and method, and the slopes stated as slopes (no 100-player claims).
+5. Results for all six configurations (C6 is the legacy hook with the same focus rule, the fair existing solution for C5), with the full environment and method, and the slopes stated as slopes (no 100-player claims).
 6. What did not improve, stated plainly.
 7. Video, source repository and the complete `Explanation/` folder.
 

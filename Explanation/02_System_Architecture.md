@@ -9,9 +9,9 @@
 ## 1. Goals and non-goals
 
 **Goals**
-1. Run **one** server-driven gameplay workload under five replication setups (C1–C5, `01` §6.2) from **one** server binary, switched only by command-line arguments.
+1. Run **one** server-driven gameplay workload under six replication setups (C1–C6, `01` §6.2) from **one** server binary, switched only by command-line arguments.
 2. Measure, the same way in every setup: server net-tick ms per frame, server busy ms per frame, bytes per second per client, and saturation.
-3. Measure correctness on the client side: position error and state staleness per drone, split into "threat" (attacking this client's pawn) and "ambient", using one clock shared by all processes.
+3. Measure correctness on the client side: position error and state staleness per drone, split into "threat" (attacking this client's avatar) and "ambient", using one clock shared by all processes.
 4. Provide a **reusable, plug-in Iris prioritiser** that adds gameplay relevance ("this object matters to the player it is engaging") on top of Epic's distance model, using only the public Iris API.
 5. Run 8, 16 or 32 headless clients plus the server inside one queue job, with the server on the P-cores and the clients on the E-cores.
 
@@ -31,6 +31,7 @@ C2  -UseIrisReplication=0  -dpcvars=Net.IsPushModelEnabled=1,net.PushModelSkipUn
 C3  C2 + -ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:ReplicationDriverClassName=/Script/ReplicationGraph.BasicReplicationGraph
 C4  -UseIrisReplication=1  -dpcvars=Net.IsPushModelEnabled=1
 C5  C4 + -NCLPrioritizer=Gameplay
+C6  C2 + -dpcvars=...,ncl.LegacyFocusPriority=1      (the same focus rule in the legacy AActor::GetNetPriority hook)
 ```
 
 **The prioritiser.** Iris asks each prioritiser, once per send and per connection, "how important is each of these objects to this connection?". Epic's sphere prioritiser answers from distance only. Ours, `UNCLGameplayPrioritizer`, **is** the sphere prioritiser (it calls `Super::Prioritize`), and then adds a fixed boost to every object whose *focus target* is this connection's own view target:
@@ -40,7 +41,7 @@ priority(object, connection) = sphere(distance(object, view))                   
                              + FocusPriorityBoost   if focus(object) == view target(connection)
 ```
 
-A drone's focus target is the pawn it attacks. So a drone shooting at player 7 is urgent for player 7 only; everyone else sees it at its normal distance priority. This is the same shape as Epic's `USphereWithOwnerBoostNetObjectPrioritizer` (distance + `OwnerPriorityBoost` for the owning connection, `01b` #8), with "owner" replaced by a gameplay relation that the game updates at run time.
+A drone's focus target is the player avatar it attacks. So a drone shooting at player 7 is urgent for player 7 only; everyone else sees it at its normal distance priority. This is the same shape as Epic's `USphereWithOwnerBoostNetObjectPrioritizer` (distance + `OwnerPriorityBoost` for the owning connection, `01b` #8), with "owner" replaced by a gameplay relation that the game updates at run time.
 
 **Why a boost and not a multiplier or a separate model:**
 
@@ -66,7 +67,7 @@ D:\UNREAL PORTFOLIO\P05_NetCostLab\Tools\                    ← Python: run orc
 | Module | Type | Responsibility | Depends on |
 |---|---|---|---|
 | `NetCostLabCore` (plugin) | Runtime | The gameplay-aware Iris prioritiser and its config | `Core`, `CoreUObject`, `Engine`, `NetCore`, `IrisCore` (via `SetupIrisSupport`) |
-| `NetCostLab` (primary game module) | Runtime | Game mode, pawns, drones, props, workload driver, benchmark director, telemetry | `Core`, `CoreUObject`, `Engine`, `NetCore`, `IrisCore`, `NetCostLabCore` |
+| `NetCostLab` (primary game module) | Runtime | Game mode, player avatars, drones, props, workload driver, benchmark director, telemetry | `Core`, `CoreUObject`, `Engine`, `NetCore`, `IrisCore`, `NetCostLabCore` |
 | `Tools\` | Python | Launch server + clients pinned to cores (one queue job per batch), interleaving, manifests, CSV statistics, the offline position-error and staleness join | — |
 
 **The dependency rule:** game → plugin, never the reverse. The plugin knows nothing about drones or benchmarks; it only knows "objects", "focus targets" and "views".
@@ -107,20 +108,20 @@ The game later calls `SetFocusTarget(Handle, TargetNetHandle)` only when gamepla
 
 | Class | Base | Responsibility |
 |---|---|---|
-| `ANCLGameMode` | `AGameModeBase` | Sets the pawn, controller and game-state classes; nothing else |
+| `ANCLGameMode` | `AGameModeBase` | Sets the controller class and no pawn class; `PostLogin` asks the workload for an avatar and makes it the player's view target; `Logout` frees it; `RestartPlayer` does nothing (there is no pawn to spawn) |
 | `ANCLGameState` | `AGameStateBase` | Replicates the run phase (`ENCLBenchPhase`: Waiting, WarmUp, Capture, Settle, Dump) so headless clients know when to start and stop logging and when to write their files and quit |
-| `ANCLPlayerController` | `APlayerController` | Overrides `GetPlayerViewPoint` to return the possessed pawn's location on the server, so the view used by every system is server-determined and identical (`01b` #12) |
-| `ANCLPlayerPawn` | `APawn` | A replicated pawn with no movement component. The server moves it on its seeded loop. Holds its `PlayerSlot` |
-| `ANCLDrone` | `AActor` | Replicated movement plus push-based gameplay fields (`State` struct: `Seq`, `Mode`, `TargetSlot`, `Health`; four loadout fields). On clients, overrides `OnRep_ReplicatedMovement` and `OnRep_State` to record arrivals into the client recorder |
+| `ANCLPlayerController` | `APlayerController` | Overrides `GetPlayerViewPoint` to return its view target's (the avatar's) location and rotation on the server, so the view used by every system is server-determined and identical (`01b` #12). The avatar faces its direction of travel, so the view looks where the player walks (legacy priority depends on the view direction) |
+| `ANCLPlayerAvatar` | `AActor` | The server-driven stand-in for one player: replicated movement, its `PlayerSlot` (sent once). **Not a pawn and never possessed** (changed in S1): a possessed pawn is an autonomous proxy on its owner, which `COND_SimulatedOrPhysics` movement never reaches, and possession brings controller/pawn replication the study does not need. Being the controller's view target is all the replication views need (`NetConnection.cpp:861–865`) |
+| `ANCLDrone` | `AActor` | Replicated movement plus push-based gameplay fields (`State` struct: `Seq`, `Mode`, `TargetSlot`, `Health`; four loadout fields; `DroneIndex` sent once). On clients, overrides `OnRep_ReplicatedMovement` and `OnRep_State` to record arrivals (S3). On the server, overrides `AActor::GetNetPriority` for **C6**: when `ncl.LegacyFocusPriority` is on and the viewer's view target is the drone's focus avatar, it returns the engine's own view-target priority `NetPriority × Time × 4` (`ActorReplication.cpp:56–59`); otherwise `Super` (S5) |
 | `ANCLProp` | `AActor` | Stationary; four push-based fields that toggle on a seeded schedule |
-| `UNCLWorkloadSubsystem` | `UTickableWorldSubsystem` (server only) | Seeded spawn; each frame moves drones and pawns as a function of server time, applies the change schedule (calling `MARK_PROPERTY_DIRTY_FROM_NAME`), records server truth; computes the workload hash; in C5 assigns drones to the prioritiser (retrying until each has an Iris handle) and updates focus targets when a drone retargets |
+| `UNCLWorkloadSubsystem` | `UTickableWorldSubsystem` (works on the server; on clients it only counts arrivals when asked) | Seeded spawn from a **pure plan** (`MakePlan`: loops, prop positions, hash; tested without a world); each frame moves drones and avatars as a function of server time, applies the change schedule (calling `MARK_PROPERTY_DIRTY_FROM_NAME`) with one random stream **per event**, seeded from (seed, kind, object, event number), so no value depends on tick timing; records server truth; computes the workload hash; in C5 assigns drones to the prioritiser (retrying until each has an Iris handle) and updates focus targets when a drone retargets |
 | `UNCLBenchSubsystem` | `UTickableWorldSubsystem` (server and client) | The director. Reads `-NCL…=` arguments; server: waits for N clients, warm-up, `CSV_EVENT(BenchStart)`, capture, settle, dump, exit; samples per-connection `OutTotalBytes` and busy ms at `FWorldDelegates::OnWorldTickEnd` (after the net flush, `01b` #10) and publishes CSV stats; client: event recorder, frame-rate check, dumps on `Dump`, exits |
 
 **Why a world subsystem for the workload and the director:** the project has no hand-authored map (an engine template map, as in P01), so nothing would place a manager actor; a world subsystem has exactly the world's lifetime. **Why two subsystems:** the workload is server-only and is the same in every configuration; the director also runs on clients and owns measurement. Keeping them apart means the measuring code cannot change the workload.
 
 **Why the drone state is one struct (`FNCLDroneState`):** `Seq` increments on every gameplay change, so the client can tell exactly which server change it is seeing; one struct keeps `Seq`, `Mode`, `TargetSlot` and `Health` consistent with each other. The four loadout fields stay separate properties on purpose: they are what makes the push-model comparison meaningful (legacy compares each one at every update, push skips them, H1).
 
-**Why `TargetSlot` (an `int8`) and not a pawn pointer:** an object reference adds NetGUID resolution on the client and differs between systems; a slot index is plain data. The server maps slot → pawn → `FNetHandle` for the prioritiser.
+**Why `TargetSlot` (an `int8`) and not an avatar pointer:** an object reference adds NetGUID resolution on the client and differs between systems; a slot index is plain data. The server maps slot → avatar → `FNetHandle` for the prioritiser.
 
 ## 5. Overview diagram
 
@@ -134,8 +135,8 @@ flowchart LR
     WL["UNCLWorkloadSubsystem<br/>seeded spawn · drive · schedule · truth log"]
     BS["UNCLBenchSubsystem<br/>phases · CSV stats · bytes per connection"]
     GS["ANCLGameState<br/>replicated run phase"]
-    PC["ANCLPlayerController<br/>view = pawn"]
-    D["ANCLDrone ×256 · ANCLProp ×768 · ANCLPlayerPawn ×N"]
+    PC["ANCLPlayerController<br/>view = avatar"]
+    D["ANCLDrone ×256 · ANCLProp ×768 · ANCLPlayerAvatar ×N"]
     subgraph Rep["Replication (one per config)"]
       L["C1/C2 generic (+push)"]
       G["C3 BasicReplicationGraph"]
@@ -171,7 +172,7 @@ sequenceDiagram
   participant GP as UNCLGameplayPrioritizer (C5)
   W->>W: NetworkIncoming (TickDispatch)
   W->>WL: Tick (after PostPhysics)
-  WL->>WL: move drones + pawns to f(server time); apply schedule; MARK_PROPERTY_DIRTY
+  WL->>WL: move drones + avatars to f(server time); apply schedule; MARK_PROPERTY_DIRTY
   WL->>GP: SetFocusTarget for drones that retargeted (C5 only)
   W->>BS: Tick: phase control, CSV_EVENT(BenchStart) when due
   W->>ND: TickFlush [CSV: NetworkOutgoing]
@@ -207,7 +208,7 @@ Cost: one array read per prioritised object per connection, plus a compare per v
 | Setting | Default | Reasoning |
 |---|---|---|
 | Drones / props | 256 / 768 | About 1,000 replicated actors: enough that per-connection work dominates at 32 clients, small enough that 32 uncapped clients fit on loopback. Fixed before the baselines; never changed afterwards |
-| Drone / pawn / prop `NetUpdateFrequency` | 30 / 30 / 5 Hz | Drones and pawns move every server tick; props change rarely. A competent setup, not a strawman (the hon454 lab showed what a 100 Hz default costs) |
+| Drone / avatar / prop `NetUpdateFrequency` | 30 / 30 / 5 Hz | Drones and avatars move every server tick; props change rarely. A competent setup, not a strawman (the hon454 lab showed what a 100 Hz default costs) |
 | Cull distance | 150 m (engine default, `Actor.cpp:312`) | The same number in every system (`01b` #11) |
 | Server tick | 30 Hz (`NetServerMaxTickRate`) | The engine default for dedicated servers |
 | `FocusPriorityBoost` | 2.0 | The same value Epic chose for `OwnerPriorityBoost` (`SphereWithOwnerBoostNetObjectPrioritizer.h:17`). It lifts a far threat (0.1) above the 1.0 consideration threshold. Phase 8 sweeps 1, 2 and 4 |
@@ -230,7 +231,7 @@ Cost: one array read per prioritised object per connection, plus a compare per v
 | An internal index is reused by another object | `RemoveObject` clears `FocusByIndex`, `HandleByIndex` and the map entry; `SetFocusTarget` looks up by `FNetRefHandle`, so a stale handle finds nothing | `ReplicationPrioritization.cpp:656–680` (removal on scope exit) |
 | `AddObject` is not synchronous in some engine version | `Assign` checks the captured index and refuses to guess (counted, logged) | `01b` #7 |
 | A drone has no Iris handle yet when spawned | Assignment is retried each frame from a pending list until `GetReplicatedRefHandle` is valid | `Actor.cpp:4768` (`StartReplicatingActor` in `DispatchBeginPlay`), `ReplicationSystemUtil.h:203` (a deferred variant exists) |
-| A focus target (pawn) is destroyed | Its `FNetHandle` just stops matching any view; the game clears focus when a player leaves | `ReplicationView.h:23–25` |
+| A focus target (avatar) is destroyed | Its `FNetHandle` just stops matching any view; the game clears focus when a player leaves | `ReplicationView.h:23–25` |
 | Per-event logging allocates during the capture | Client and server recorders `Reserve` their arrays before `BenchStart`; files are written only in `Dump` | Measurement hygiene (`01` §4) |
 | Logging cost differs between configurations | Recording is the same code in every configuration; Scenario A turns client recording off entirely (`-NCLLog=0`) | `01` §6.4 |
 | `CSV_CUSTOM_STAT` per object would distort timing | All counters are plain fields published once per frame | P01 measured ~50 ns per custom stat |
@@ -244,6 +245,7 @@ Cost: one array read per prioritised object per connection, plus a compare per v
 | C3 | The replication driver | `-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:ReplicationDriverClassName=/Script/ReplicationGraph.BasicReplicationGraph` (+ C2's cvars) |
 | C4 | The replication system | `-UseIrisReplication=1` on server **and** clients (+ push on) |
 | C5 | Drones are assigned to our prioritiser | C4 + `-NCLPrioritizer=Gameplay` (server only) |
+| C6 | Drones use the focus rule in `GetNetPriority` | C2 + `ncl.LegacyFocusPriority=1` (server only; legacy calls the hook, Iris and Replication Graph never do, `01b` §3) |
 
 Our game code calls `MARK_PROPERTY_DIRTY_FROM_NAME` after every change in **every** configuration; when push is off the call does nothing useful, and its cost is identical everywhere. The prioritiser is registered in `DefaultEngine.ini` in every configuration; with no objects assigned it costs nothing per frame: `PrePrioritize` is skipped when its `ObjectCount == 0` (`ReplicationPrioritization.cpp:555–567`), and `Prioritize` is only called with batches that contain its own objects (`:760–800`).
 
@@ -270,7 +272,7 @@ Our game code calls `MARK_PROPERTY_DIRTY_FROM_NAME` after every change in **ever
 3. **Out-of-the-box Replication Graph.** `UBasicReplicationGraph` is Epic's example; a tuned graph could beat it.
 4. **One view per connection.** Split-screen views are handled by the loop but not tested.
 5. **The boost is additive and unconditional.** A drone with a focus target is boosted even if it is behind a wall; line of sight is a growth path.
-6. **The server-driven pawns are not real players.** No client input means no server move RPCs, which real games pay for. That cost is the same in every configuration, so it is excluded on purpose.
+6. **The server-driven avatars are not real players.** No client input means no server move RPCs, which real games pay for. That cost is the same in every configuration, so it is excluded on purpose.
 7. **No movement smoothing on clients.** Position error is larger than what players would see with interpolation; it measures replication freshness, which is the point.
 
 ## 13. Changes from the plan (README, 2026-11-20 → 2026-11-21)
@@ -286,3 +288,6 @@ Our game code calls `MARK_PROPERTY_DIRTY_FROM_NAME` after every change in **ever
 | Server-determined view (`GetPlayerViewPoint` override) | All systems read the view from the camera cache otherwise (`01b` #12) |
 | Shared QPC clock instead of time synchronisation | All processes are on one PC (`01b` #13) |
 | Clients = packaged game; sub-object lists on for every configuration (Phase 4) | Check F4 and probe P2-1 (`09`) |
+| C6 added: the same focus rule in the legacy `GetNetPriority` hook (owner decision, 2026-11-21) | A fair existing-solution comparison for C5 (`01` §6.2) |
+| Players get an `ANCLPlayerAvatar` (an actor, view target only) instead of a possessed `APawn` (S1) | Possession would make the avatar an autonomous proxy on its own client and add pawn/controller replication; the view target alone defines the replication view |
+| The seed-determined part of the workload is a pure function, `MakePlan` (S1) | Automation tests can check determinism and bounds without a world |
