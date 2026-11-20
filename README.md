@@ -75,3 +75,7 @@ The UE project is in [NetCostLab/](NetCostLab/) (UE 5.8.4, C++):
 ## Why studios care
 
 Riot: "bandwidth optimization, server density". Epic: "network replication systems (client-server prediction, state synchronization, lag compensation)". Fortnite BR's 100-player server work and Respawn's Apex netcode write-up ([research/02](Explanation/Research/02_technical_challenges.md) [T3-A], [T3-G]).
+
+## License
+
+MIT, see [LICENSE](LICENSE). Unreal Engine itself is not included and is covered by Epic Games' own license.
