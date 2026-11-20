@@ -1,0 +1,82 @@
+{
+  "batch": "2026-11-21_025233_foundation_fix1",
+  "purpose": "Phase 2 probe P2-1 and Phase 4 checks F1-F4, one queue job",
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "only": "F1-F2_build_editor,F1_build_game,F3a_package,F3b_smoke_packaged,F4_packaged_clients",
+  "steps": {
+    "F1-F2_build_editor": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLabEditor",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 3.9,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "F1_build_game": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLab",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 1.8,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "F3a_package": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\package.bat",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 59.0,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "F3b_smoke_packaged": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\smoke_game.bat",
+        "packaged"
+      ],
+      "exit_code": 0,
+      "seconds": 2.7,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "F4_packaged_clients": {
+      "command": [
+        "%USERPROFILE%\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "-I",
+        "-u",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\probe_net.py",
+        "--client",
+        "packaged",
+        "--setups",
+        "legacy_push,iris",
+        "--skip-server-target",
+        "--label",
+        "f4"
+      ],
+      "exit_code": 0,
+      "seconds": 59.8,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    }
+  }
+}

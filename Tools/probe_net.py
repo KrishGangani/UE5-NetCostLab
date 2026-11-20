@@ -54,6 +54,8 @@ SETUPS = {
 # Log lines kept as evidence (regex, searched in every log).
 EVIDENCE = [
     r"IpNetDriver listening on port \d+",
+    r"using replication model \w+",
+    r"Ensure condition failed: \S+",
     r"Bringing .* up for play \(max tick rate \d+\)",
     r"Join succeeded: .*",
     r"Welcomed by server .*",

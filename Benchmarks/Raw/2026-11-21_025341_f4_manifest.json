@@ -1,0 +1,282 @@
+{
+  "batch": "2026-11-21_025341_f4",
+  "purpose": "Phase 2 probe P2-1: Server target, editor-binary dedicated server, headless clients, 3 setups",
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "server_binary": "UnrealEditor-Cmd.exe -server (Development editor build), uncooked project",
+  "client_binary": "packaged",
+  "map": "/Engine/Maps/Templates/Template_Default",
+  "clients": 2,
+  "affinity": {
+    "server_mask": "0xFFFF",
+    "client_mask": "0xFF0000",
+    "rule": "server on the performance cores, clients on the remaining cores"
+  },
+  "logical_cpus": 24,
+  "setups": {
+    "legacy_push": {
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_025341_f4\\legacy_push_server.log",
+        "-ExecCmds=Net.IsPushModelEnabled,net.Iris.UseIrisReplication,net.Iris.PushModelMode",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "client_exe": "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Build\\Windows\\NetCostLab\\Binaries\\Win64\\NetCostLab.exe",
+      "client_command": [
+        "127.0.0.1",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_025341_f4\\legacy_push_client0.log",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "steps": {
+        "server_listening": true,
+        "server_listening_s": 8.5,
+        "clients_joined": true,
+        "clients_welcomed": true,
+        "joined_s": 10.7
+      },
+      "working_set_mb": {
+        "NetCostLab.exe": [
+          347.8,
+          347.7
+        ],
+        "UnrealEditor-Cmd.exe": [
+          1536.6
+        ]
+      },
+      "exited_early": [
+        null,
+        null,
+        null
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "server_log": {
+        "errors": 0,
+        "warnings": 21,
+        "evidence": {
+          "ReplicationDriverClass is null.*": [
+            "ReplicationDriverClass is null! Not using ReplicationDriver."
+          ],
+          "using replication model \\w+": [
+            "using replication model Generic"
+          ],
+          "IpNetDriver listening on port \\d+": [
+            "IpNetDriver listening on port 7777"
+          ],
+          "Bringing .* up for play \\(max tick rate \\d+\\)": [
+            "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 30)"
+          ],
+          "Net\\.IsPushModelEnabled = .*": [
+            "Net.IsPushModelEnabled = \"true\"      LastSetBy: DeviceProfile"
+          ],
+          "net\\.Iris\\.UseIrisReplication = .*": [
+            "net.Iris.UseIrisReplication = \"0\"      LastSetBy: Constructor"
+          ],
+          "net\\.Iris\\.PushModelMode = .*": [
+            "net.Iris.PushModelMode = \"2\"      LastSetBy: Constructor"
+          ],
+          "Join succeeded: .*": [
+            "Join succeeded: <host>-AECA612F4FA1DA",
+            "Join succeeded: <host>-8F6148BE4E4021"
+          ]
+        },
+        "lines": 1481
+      },
+      "client_logs": [
+        {
+          "errors": 0,
+          "warnings": 0,
+          "evidence": {
+            "using replication model \\w+": [
+              "using replication model Generic"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 764
+        },
+        {
+          "errors": 0,
+          "warnings": 0,
+          "evidence": {
+            "using replication model \\w+": [
+              "using replication model Generic"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 764
+        }
+      ],
+      "server_errors_sample": [],
+      "client0_errors_sample": []
+    },
+    "iris": {
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_025341_f4\\iris_server.log",
+        "-ExecCmds=Net.IsPushModelEnabled,net.Iris.UseIrisReplication,net.Iris.PushModelMode",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=1",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "client_exe": "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Build\\Windows\\NetCostLab\\Binaries\\Win64\\NetCostLab.exe",
+      "client_command": [
+        "127.0.0.1",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_025341_f4\\iris_client0.log",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=1",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "steps": {
+        "server_listening": true,
+        "server_listening_s": 8.6,
+        "clients_joined": true,
+        "clients_welcomed": true,
+        "joined_s": 10.9
+      },
+      "working_set_mb": {
+        "NetCostLab.exe": [
+          359.8,
+          359.5
+        ],
+        "UnrealEditor-Cmd.exe": [
+          1550.1
+        ]
+      },
+      "exited_early": [
+        null,
+        null,
+        null
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "server_log": {
+        "errors": 0,
+        "warnings": 22,
+        "evidence": {
+          "LogIris: .*": [
+            "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_0 (0x00000251D6897D20) is created",
+            "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+            "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 108.",
+            "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+          ],
+          "using replication model \\w+": [
+            "using replication model Iris"
+          ],
+          "IpNetDriver listening on port \\d+": [
+            "IpNetDriver listening on port 7777"
+          ],
+          "Bringing .* up for play \\(max tick rate \\d+\\)": [
+            "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 30)"
+          ],
+          "Net\\.IsPushModelEnabled = .*": [
+            "Net.IsPushModelEnabled = \"true\"      LastSetBy: DeviceProfile"
+          ],
+          "net\\.Iris\\.UseIrisReplication = .*": [
+            "net.Iris.UseIrisReplication = \"0\"      LastSetBy: Constructor"
+          ],
+          "net\\.Iris\\.PushModelMode = .*": [
+            "net.Iris.PushModelMode = \"2\"      LastSetBy: Constructor"
+          ],
+          "Join succeeded: .*": [
+            "Join succeeded: <host>-273C371142695F",
+            "Join succeeded: <host>-0224CE1644489C"
+          ]
+        },
+        "lines": 1481
+      },
+      "client_logs": [
+        {
+          "errors": 0,
+          "warnings": 3,
+          "evidence": {
+            "LogIris: .*": [
+              "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_2147482459 (0x00007FE9FC5879C0) is created",
+              "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+              "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 93.",
+              "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+            ],
+            "using replication model \\w+": [
+              "using replication model Iris"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 772
+        },
+        {
+          "errors": 0,
+          "warnings": 3,
+          "evidence": {
+            "LogIris: .*": [
+              "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_2147482459 (0x00007FEA51D17960) is created",
+              "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+              "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 93.",
+              "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+            ],
+            "using replication model \\w+": [
+              "using replication model Iris"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 772
+        }
+      ],
+      "server_errors_sample": [],
+      "client0_errors_sample": []
+    }
+  }
+}

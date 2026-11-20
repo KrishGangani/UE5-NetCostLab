@@ -2,7 +2,7 @@
 
 > *"This was the problem. This was my investigation. This was my solution. These were my technical decisions. This was how I measured the results."*
 
-**Status (2026-11-21):** Phases 1–3 are done (problem in `01`, verified research in `01b`, final architecture v1.0 in `02`). Phase 4 (the foundation) is recorded in `09`. There is no gameplay code yet, and **no results exist yet**.
+**Status (2026-11-21):** Phases 1–4 are done: problem in `01`, verified research in `01b`, final architecture v1.0 in `02`, build steps in `03`, and the foundation (UE project, plugin, scripts; editor and game builds with 0 warnings; packaged smoke run; packaged headless clients joining an editor-binary dedicated server) in `09`. There is no gameplay code yet, and **no results exist yet**.
 
 ---
 
