@@ -1,0 +1,412 @@
+{
+  "batch": "2026-11-21_022542_probe",
+  "purpose": "Phase 2 probe P2-1: Server target, editor-binary dedicated server, headless clients, 3 setups",
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "server_binary": "UnrealEditor-Cmd.exe -server (Development editor build), uncooked project",
+  "client_binary": "editor",
+  "map": "/Engine/Maps/Templates/Template_Default",
+  "clients": 2,
+  "affinity": {
+    "server_mask": "0xFFFF",
+    "client_mask": "0xFF0000",
+    "rule": "server on the performance cores, clients on the remaining cores"
+  },
+  "logical_cpus": 24,
+  "server_target": {
+    "command": "\"C:\\Program Files\\Epic Games\\UE_5.8\\Engine\\Build\\BatchFiles\\Build.bat\" NetCostLabServer Win64 Development -Project=\"D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject\" -WaitMutex",
+    "exit_code": 6,
+    "seconds": 1.1,
+    "message": "Server targets are not currently supported from this engine distribution."
+  },
+  "setups": {
+    "legacy_push": {
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_022542_probe\\legacy_push_server.log",
+        "-ExecCmds=Net.IsPushModelEnabled,net.Iris.UseIrisReplication,net.Iris.PushModelMode",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "client_exe": "C:\\Program Files\\Epic Games\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+      "client_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "127.0.0.1",
+        "-game",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_022542_probe\\legacy_push_client0.log",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "steps": {
+        "server_listening": true,
+        "server_listening_s": 40.2,
+        "clients_joined": true,
+        "clients_welcomed": true,
+        "joined_s": 63.5
+      },
+      "working_set_mb": {
+        "UnrealEditor-Cmd.exe": [
+          1803.1,
+          1796.6,
+          1659.1
+        ]
+      },
+      "exited_early": [
+        null,
+        null,
+        null
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "server_log": {
+        "errors": 0,
+        "warnings": 21,
+        "evidence": {
+          "ReplicationDriverClass is null.*": [
+            "ReplicationDriverClass is null! Not using ReplicationDriver."
+          ],
+          "IpNetDriver listening on port \\d+": [
+            "IpNetDriver listening on port 7777"
+          ],
+          "Bringing .* up for play \\(max tick rate \\d+\\)": [
+            "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 30)"
+          ],
+          "Net\\.IsPushModelEnabled = .*": [
+            "Net.IsPushModelEnabled = \"true\"      LastSetBy: DeviceProfile"
+          ],
+          "net\\.Iris\\.UseIrisReplication = .*": [
+            "net.Iris.UseIrisReplication = \"0\"      LastSetBy: Constructor"
+          ],
+          "net\\.Iris\\.PushModelMode = .*": [
+            "net.Iris.PushModelMode = \"2\"      LastSetBy: Constructor"
+          ],
+          "Join succeeded: .*": [
+            "Join succeeded: <host>-E862240E45877B",
+            "Join succeeded: <host>-75269DF54DCACF"
+          ]
+        },
+        "lines": 1482
+      },
+      "client_logs": [
+        {
+          "errors": 0,
+          "warnings": 21,
+          "evidence": {
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 1456
+        },
+        {
+          "errors": 0,
+          "warnings": 21,
+          "evidence": {
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 1453
+        }
+      ],
+      "server_errors_sample": [],
+      "client0_errors_sample": []
+    },
+    "repgraph": {
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_022542_probe\\repgraph_server.log",
+        "-ExecCmds=Net.IsPushModelEnabled,Net.RepGraph.PrintGraph",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:ReplicationDriverClassName=/Script/ReplicationGraph.BasicReplicationGraph"
+      ],
+      "client_exe": "C:\\Program Files\\Epic Games\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+      "client_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "127.0.0.1",
+        "-game",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_022542_probe\\repgraph_client0.log",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=0",
+        "-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:ReplicationDriverClassName=/Script/ReplicationGraph.BasicReplicationGraph"
+      ],
+      "steps": {
+        "server_listening": true,
+        "server_listening_s": 9.6,
+        "clients_joined": true,
+        "clients_welcomed": true,
+        "joined_s": 20.3
+      },
+      "working_set_mb": {
+        "UnrealEditor-Cmd.exe": [
+          1803.4,
+          1799.2,
+          1664.1
+        ]
+      },
+      "exited_early": [
+        null,
+        null,
+        null
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "server_log": {
+        "errors": 0,
+        "warnings": 21,
+        "evidence": {
+          "IpNetDriver listening on port \\d+": [
+            "IpNetDriver listening on port 7777"
+          ],
+          "Bringing .* up for play \\(max tick rate \\d+\\)": [
+            "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 30)"
+          ],
+          "Net\\.IsPushModelEnabled = .*": [
+            "Net.IsPushModelEnabled = \"false\"      LastSetBy: Constructor"
+          ],
+          "UReplicationGraph.*|ReplicationGraphNode_GridSpatialization2D.*": [
+            "ReplicationGraphNode_GridSpatialization2D_0"
+          ],
+          "Join succeeded: .*": [
+            "Join succeeded: <host>-5C81F3A449EFC2",
+            "Join succeeded: <host>-648CDFDE4A6D37"
+          ]
+        },
+        "lines": 1473
+      },
+      "client_logs": [
+        {
+          "errors": 0,
+          "warnings": 21,
+          "evidence": {
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 1455
+        },
+        {
+          "errors": 0,
+          "warnings": 21,
+          "evidence": {
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 1456
+        }
+      ],
+      "server_errors_sample": [],
+      "client0_errors_sample": []
+    },
+    "iris": {
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_022542_probe\\iris_server.log",
+        "-ExecCmds=Net.IsPushModelEnabled,net.Iris.UseIrisReplication,net.Iris.PushModelMode",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=1",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "client_exe": "C:\\Program Files\\Epic Games\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+      "client_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "127.0.0.1",
+        "-game",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_022542_probe\\iris_client0.log",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding",
+        "-UseIrisReplication=1",
+        "-dpcvars=Net.IsPushModelEnabled=1"
+      ],
+      "steps": {
+        "server_listening": true,
+        "server_listening_s": 10.8,
+        "clients_joined": true,
+        "clients_welcomed": true,
+        "joined_s": 23.4
+      },
+      "working_set_mb": {
+        "UnrealEditor-Cmd.exe": [
+          1838.3,
+          1824.7,
+          1684.9
+        ]
+      },
+      "exited_early": [
+        null,
+        null,
+        null
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "server_log": {
+        "errors": 58,
+        "warnings": 34,
+        "evidence": {
+          "LogIris: .*": [
+            "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_0 (0x0000020001A0A1E0) is created",
+            "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+            "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 108.",
+            "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+          ],
+          "IpNetDriver listening on port \\d+": [
+            "IpNetDriver listening on port 7777"
+          ],
+          "Bringing .* up for play \\(max tick rate \\d+\\)": [
+            "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 30)"
+          ],
+          "Net\\.IsPushModelEnabled = .*": [
+            "Net.IsPushModelEnabled = \"true\"      LastSetBy: DeviceProfile"
+          ],
+          "net\\.Iris\\.UseIrisReplication = .*": [
+            "net.Iris.UseIrisReplication = \"0\"      LastSetBy: Constructor"
+          ],
+          "net\\.Iris\\.PushModelMode = .*": [
+            "net.Iris.PushModelMode = \"2\"      LastSetBy: Constructor"
+          ],
+          "Join succeeded: .*": [
+            "Join succeeded: <host>-C6E45D3A49B1A6",
+            "Join succeeded: <host>-1B1BAF0545F11F"
+          ]
+        },
+        "lines": 1570
+      },
+      "client_logs": [
+        {
+          "errors": 30,
+          "warnings": 25,
+          "evidence": {
+            "LogIris: .*": [
+              "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_0 (0x00000272EAFB6C80) is created",
+              "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+              "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 134.",
+              "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 1498
+        },
+        {
+          "errors": 30,
+          "warnings": 25,
+          "evidence": {
+            "LogIris: .*": [
+              "LogIris: Display: Iris ReplicationSystem[0]: ReplicationSystem_0 (0x0000020A370D4FA0) is created",
+              "LogIris: NetRefHandleManager: Configured with MaxActiveObjectCount=65536, MaxInternalNetRefIndex: 65536, Grow=16384, NetChunkedArray: Init=65536|Highest=65535",
+              "LogIris: Display: FInternalNetSerializerDelegates::BroadcastLoadedModulesUpdated() called while there are 0 active ReplicationSystems. This is good. Total loaded modules: 104.",
+              "LogIris: FPolymorphicNetSerializerScriptStructCache::InitForType Updated CachedTypeNames for base RootMotionSource, NumCachedTypes: 6"
+            ],
+            "Welcomed by server .*": [
+              "Welcomed by server (Level: /Engine/Maps/Templates/Template_Default, Game: /Script/Engine.GameModeBase)"
+            ],
+            "Bringing .* up for play \\(max tick rate \\d+\\)": [
+              "Bringing World /Engine/Maps/Templates/Template_Default.Template_Default up for play (max tick rate 0)"
+            ]
+          },
+          "lines": 1500
+        }
+      ],
+      "server_errors_sample": [
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: === Handled ensure: ===",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error:",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: Ensure condition failed: GDefaultUseSubObjectReplicationList  [File:D:\\build\\++UE5\\Sync\\Engine\\Source\\Runtime\\Engine\\Private\\Net\\Iris\\ReplicationSystem\\EngineReplicat",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: Iris requires replicated actors to use registered subobjectslists. Add",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [SystemSettings]",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: net.SubObjects.DefaultUseSubObjectReplicationList=1",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error:  to your DefaultEngine.ini",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: Stack:",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb4b5b1ffb UnrealEditor-Engine.dll!UnknownFunction []",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb49ff7803 UnrealEditor-Engine.dll!UnknownFunction []",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb14c1304a UnrealEditor-IrisCore.dll!UnknownFunction []",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb14c13a99 UnrealEditor-IrisCore.dll!UnknownFunction []",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb14c0ba9a UnrealEditor-IrisCore.dll!UnknownFunction []",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb49f32663 UnrealEditor-Engine.dll!UnknownFunction []",
+        "[2026.11.20-20.57.54:228][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb49f4dea6 UnrealEditor-Engine.dll!UnknownFunction []"
+      ],
+      "client0_errors_sample": [
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: === Handled ensure: ===",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error:",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: Ensure condition failed: GDefaultUseSubObjectReplicationList  [File:D:\\build\\++UE5\\Sync\\Engine\\Source\\Runtime\\Engine\\Private\\Net\\Iris\\ReplicationSystem\\EngineReplicat",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: Iris requires replicated actors to use registered subobjectslists. Add",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: [SystemSettings]",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: net.SubObjects.DefaultUseSubObjectReplicationList=1",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error:  to your DefaultEngine.ini",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: Stack:",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb4b5b1ffb UnrealEditor-Engine.dll!UnknownFunction []",
+        "[2026.11.20-20.58.03:881][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb49ff7803 UnrealEditor-Engine.dll!UnknownFunction []",
+        "[2026.11.20-20.58.03:882][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb14c1304a UnrealEditor-IrisCore.dll!UnknownFunction []",
+        "[2026.11.20-20.58.03:882][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb14c13a99 UnrealEditor-IrisCore.dll!UnknownFunction []",
+        "[2026.11.20-20.58.03:882][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb14c0ba9a UnrealEditor-IrisCore.dll!UnknownFunction []",
+        "[2026.11.20-20.58.03:882][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb49f32663 UnrealEditor-Engine.dll!UnknownFunction []",
+        "[2026.11.20-20.58.03:882][  0]LogOutputDevice: Error: [Callstack] 0x00007ffb49f4dea6 UnrealEditor-Engine.dll!UnknownFunction []"
+      ]
+    }
+  }
+}
