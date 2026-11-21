@@ -124,7 +124,7 @@ The roadmap's gap strength "medium" stands for the prioritiser and correctness p
 - `net.SubObjects.DefaultUseSubObjectReplicationList=1` in `DefaultEngine.ini` for every configuration.
 - To check in S1: which modules load after the Iris replication system starts (P2-1f, `IrisCoreModule.cpp:141–160`).
 - Real-time runs at 30 Hz; server busy ms from `FApp`; CSV timers `ServerReplicateActors` + `NetworkOutgoing`.
-- Bytes from per-connection `OutTotalBytes`, sampled at `OnWorldTickEnd`; saturation from bytes per frame vs `CurrentNetSpeed × dt`.
+- Bytes from per-connection `OutTotalBytes`, sampled at `OnWorldTickEnd`; saturation from the engine's per-connection count of frames that end with `IsNetReady()` false (`SaturationAnalytics`, `NetConnection.cpp:5110`; chosen in S2, see `05` D2).
 - Server-determined views (`GetPlayerViewPoint` override); 150 m cull distance everywhere.
 - The prioritiser: subclass of the sphere prioritiser, additive focus boost 2.0, identity through `Assign` around `SetPrioritizer`, boost loop as a pure tested function.
 - Shared QPC clock; loss with `-PktLoss=` on every process.

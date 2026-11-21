@@ -27,6 +27,12 @@ BUILD_BAT = os.path.join(UE_ROOT, r"Engine\Build\BatchFiles\Build.bat")
 P05_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(P05_ROOT, "NetCostLab", "NetCostLab.uproject")
 ENGINE = "UE 5.8.4 (CL 58902052), launcher build"
+# Shared by every networked run (probe_net.py, run_bench.py): the map, the packaged headless client, common switches.
+MAP = "/Engine/Maps/Templates/Template_Default"
+PACKAGED_CLIENT = os.path.join(P05_ROOT, "Build", "Windows", "NetCostLab", "Binaries", "Win64", "NetCostLab.exe")
+COMMON_ARGS = ["-log", "-unattended", "-nosplash", "-nosound", "-traceautostart=0", "-NoLiveCoding"]
+IPNETDRIVER = "[/Script/OnlineSubsystemUtils.IpNetDriver]"
+REPGRAPH_INI = f"{IPNETDRIVER}:ReplicationDriverClassName=/Script/ReplicationGraph.BasicReplicationGraph"
 RAW_DIR = os.path.join(P05_ROOT, "Benchmarks", "Raw")
 
 KERNEL32 = None

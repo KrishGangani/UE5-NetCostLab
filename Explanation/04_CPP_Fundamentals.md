@@ -1,6 +1,6 @@
 # 04 · C++ Fundamentals: NetCostLab
 
-**Rule:** a language concept is explained here the first time this project's code uses it, with a small example first. Current to **Phase 5, step S1**. Each later step adds sections as it adds code (`03`).
+**Rule:** a language concept is explained here the first time this project's code uses it, with a small example first. Current to **Phase 5, step S2**. Each later step adds sections as it adds code (`03`).
 
 ---
 
@@ -206,3 +206,14 @@ TestTrue(TEXT("same seed, bit-identical loops"), First.DroneLoops == Second.Dron
 ```
 
 `= default` asks the compiler to write the comparison: equal when every member is equal (exact `==` on the doubles, which is what "bit-identical" means here). `TArray`'s own `==` then compares two arrays element by element, so the test needs no loop. UE 5.8 compiles as C++20, which allows this.
+
+## 16. Shared pointers and futures: `MakeShared`, `TSharedRef`, `TSharedPtr`, `TSharedFuture`
+
+```cpp
+const TSharedRef<FJsonObject> Report = MakeShared<FJsonObject>();   // one allocation, reference-counted, never null
+TArray<TSharedPtr<FJsonValue>> Connections;                         // may be null; a TSharedRef converts to it
+TSharedFuture<FString> CsvFile = FCsvProfiler::Get()->EndCapture(); // a value that arrives later
+if (!CsvFile.IsValid() || CsvFile.IsReady()) { /* safe to quit */ }
+```
+
+Unreal's shared pointers count references: the object is deleted when the last `TSharedRef`/`TSharedPtr` to it goes away. `TSharedRef` can never be null, so it needs no check; `TSharedPtr` can. They are for plain C++ objects (like the JSON DOM), never for `UObject`s, which the garbage collector owns (`06` §8). A **future** is a handle to a result that another thread will produce: `IsReady()` asks without waiting, `Get()` would wait. The director polls `IsReady()` once per frame, so the server never blocks.

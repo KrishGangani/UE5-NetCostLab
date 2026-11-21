@@ -7,6 +7,7 @@
 | A | Phase 4, F1–F3 (foundation) | `.uproject`, two `Target.cs`, two `Build.cs`, two module `.cpp`, `.uplugin`, config `.ini` files, `Tools\*.bat` |
 | B | Phase 2 probe and Phase 4 check F4 | `Tools\netlab_env.py`, `Tools\probe_net.py`, `Tools\foundation_job.py`, the removed probe `NetCostLabServer.Target.cs` |
 | C | Phase 5, S1 (the workload) | `NetCostLab.Build.cs` (update), `NCLLog.h`, `NCLNet.h`, module `.cpp` (update), `NCLDrone`, `NCLProp`, `NCLPlayerAvatar`, `NCLPlayerController`, `NCLGameMode`, `NCLWorkloadSubsystem`, `Tests\NCLWorkloadTests.cpp`, `Config\DefaultEngine.ini` (game mode), `Tools\check_job.py`, `Tools\run_tests.bat`, `Tools\probe_net.py`, `Tools\netlab_env.py`, `Tools\foundation_job.py` (updates) |
+| D | Phase 5, S2 (director, telemetry, run script) | `NCLGameState`, `NCLBenchSubsystem`, `NCLGameMode` and `NCLWorkloadSubsystem` (updates), `NetCostLab.Build.cs` (`Json`), `Tools\run_bench.py`, `Tools\csv_stats.py`, `Tools\check_job.py` (`--bench`) |
 
 ---
 
@@ -423,3 +424,55 @@ void ANCLPlayerController::GetPlayerViewPoint(FVector& OutLocation, FRotator& Ou
 | `Tools\check_job.py` | One queue job per Phase 5 step: `--build`, `--tests FILTER`, `--package`, `--smoke`, `--probe "ARGS"` (repeatable), always in that order, stopping at the first failure. Reuses `foundation_job.run_step`, `TOOLS` and `PY`, and `netlab_env`'s batch helpers. After the S1 review: the test step passes `run_tests.bat` a log path inside the fresh batch folder (`tests_editor.log`, given relative to `Tools\`), so an old run's log can never be read, and records each test's result in the manifest (from the editor's "Test Completed. Result={…}" lines); `--probe` strings are split by `split_args` (whitespace outside double quotes), because `shlex` would eat the backslashes of a Windows path |
 | `Tools\probe_net.py` | New setup `legacy` (C1, push off); `--extra=ARGS` (added to server and clients; an `--extra` value starting with `-` must use the `=` form); `--hold SEC`; evidence patterns for our `NCL workload`, `NCL player joined/left` and `NCL counts` lines (the last four count lines are kept: the pattern is one constant, `COUNTS`, used in both lists). The switches shared by server and clients are built once (`tail`) |
 | `Tools\netlab_env.py` (S1 simplify pass) | `ENGINE` (the engine string every manifest records), `RAW_DIR`, `new_batch(label)` (batch name and its git-ignored folder) and `write_manifest(batch, manifest)` (sanitised JSON). `foundation_job.py`, `probe_net.py` and `check_job.py` each had their own copy of these lines |
+
+---
+
+## Part D · Step S2: the director, the telemetry and the run script
+
+The director runs one benchmark run from inside the game: it decides when the measured window opens and closes, measures it, and ends every process. Everything that measures lives here, so the workload stays identical whether or not a run is measured.
+
+### D1. `NCLGameState.h` / `.cpp`: the run phase, replicated
+
+| Line | What it does, and why |
+|---|---|
+| `UENUM() enum class ENCLBenchPhase : uint8 { Waiting, WarmUp, Capture, Settle, Dump }` | The five phases of a run, one byte on the wire. `UENUM` makes it a reflected type, so it can be a replicated property |
+| `class ANCLGameState : public AGameStateBase` | The game state exists once per world and is replicated to every client. `AGameStateBase` matches our `AGameModeBase` (mixing the two families logs an error, `06` §23) |
+| `UPROPERTY(Replicated) ENCLBenchPhase BenchPhase` + `DOREPLIFETIME_WITH_PARAMS_FAST(…, PushBased)` | The phase replicates push-based, like every other property in this project (`06` §12–13) |
+| `SetBenchPhase`: assign, `MARK_PROPERTY_DIRTY_FROM_NAME`, `ForceNetUpdate()` | Mark it dirty for the push model, and ask to be considered at the next net update (`ForceNetUpdate`). The game state keeps the actor default of 100 Hz (`Actor.cpp:295`), so today it is considered every 30 Hz tick anyway; the call keeps the phase prompt in every system if that rate is ever lowered |
+| Always relevant | `AGameStateBase` sets `bAlwaysRelevant` (`GameStateBase.cpp:26`); Iris does not spatially filter `AInfo` actors (`BaseEngine.ini:1519`). Every client gets the phase in every configuration |
+
+`ANCLGameMode` sets `GameStateClass = ANCLGameState::StaticClass()`.
+
+### D2. `NCLBenchSubsystem.h` / `.cpp`: the director
+
+**The shape.** Another `UTickableWorldSubsystem`, on the server and on every client. `Initialize` reads the command line; `OnWorldBeginPlay` decides the role; `Tick` runs the phase machine; `OnWorldTickEnd` measures.
+
+| Piece | What it does, and why |
+|---|---|
+| `FSettings` + `ReadSettings()` | `-NCLClients=N` (server: how many to wait for; 0 = the director stays idle, so probes and smoke runs are unaffected), `-NCLWarmup=SEC` (20), `-NCLCaptureFrames=N` (1,800 = 60 s at 30 Hz), `-NCLSettle=SEC` (5), `-NCLRunTag`, `-NCLConfig` (a label in the CSV metadata and the report), `-NCLOutDir`, `-NCLClientIndex=K` (a client's report number), `-NCLClientFPS=N` (a client's frame cap), `-NCLExit` |
+| Client: `GEngine->SetMaxFPS(ClientMaxFPS)` in `OnWorldBeginPlay` | The clients' 30 fps cap. *Why not `-dpcvars=t.MaxFPS=30`:* the first S2 run showed clients at about 2,100 fps with exactly that switch. `UGameEngine::Init` re-applies the user settings on every process that is not a dedicated server and sets `t.MaxFPS` to `FrameRateLimit`, which is 0 (`GameEngine.cpp:1249–1250`, `GameUserSettings.cpp:535–538`); `SetMaxFPS` keeps the previous priority, so the switch's value is simply replaced (`UnrealEngine.cpp:12247–12254`). A client's game world begins play after that, so the cap set here stays (`07` S2-8) |
+| `namespace NCLBench`: `ClientReportTimeoutSeconds` 30, `LongFrameTicks` 2; `ViewedAvatar(Controller)`, `WorkloadHashText(World)` | The director's constants, named, and two file-local helpers used in several places. A frame longer than two net ticks (`1 / NetServerMaxTickRate`, read when the window opens) is a hitch: counted in the report, never hidden |
+| `DoesSupportWorldType`: `Game` only | In PIE several client worlds share one process and one command line, so their reports would overwrite each other; measured runs never use PIE |
+| `OnWorldBeginPlay`: `bServer`, `bDirecting`, `OnWorldTickEnd.AddUObject` | A server directs only with `-NCLClients`; a client always follows (idle, it costs one pointer check per frame). Only a directing server binds the tick-end delegate; `Deinitialize` removes it |
+| `TickServer`: `Waiting` → `WarmUp` | Waits until `CountJoinedPlayers()` (connections whose controller's view target is an avatar, i.e. `PostLogin` has run) reaches N |
+| `WarmUp` → `Capture`: `BeginMeasuredWindow()` | Lists the connections, writes CSV metadata (`NCLRunTag`, `NCLConfig`, `NCLClients`, `NCLWorkloadHash`) and calls `FCsvProfiler::BeginCapture(-1, OutDir, RunTag + "_server.csv")`. The capture starts at the **next** frame (`CsvProfiler.cpp:3870–3895`) |
+| `OnWorldTickEnd`, first call in `Capture`: `TakeBaseline()` | The frame that requested the capture is not captured, so it is not counted either: its tick end records each connection's `OutTotalBytes` and the engine's saturated-frame count as starting points and starts the wall clock |
+| Every later call: `SampleFrame()` | One captured frame. Frame 1 emits `CSV_EVENT(BenchStart)` (only now is the capture running, `07` S2-1). Per connection: bytes this frame (`OutTotalBytes` delta, after the flush, `06` §20–21) and whether the frame was saturated: the engine itself counts, per connection, the frames that end with the connection not ready to send (`SaturationAnalytics.TrackFrame(!IsNetReady())`, `NetConnection.cpp:5110`), which is the metric `01` §6.4 defines; the director reads that counter and its step this frame (`07` S2-4). Per frame: four CSV columns, `NetCostLab/BusyMsPrevFrame` (the previous frame's delta minus its idle sleep, `UnrealEngine.cpp:3156`), `/OutBytes`, `/SatConnections`, `/Clients` |
+| After frame N: `EndMeasuredWindow()` | `CSV_EVENT(BenchEnd)`, `EndCapture()` (this frame is still captured, `CsvProfiler.cpp:4208–4218`), freezes the workload's changes, enters `Settle`. The CSV and the byte window therefore cover **the same N frames** (`07` S2-2) |
+| `Settle` → `Dump`: `WriteServerReport()` | After 5 s without changes, `<run>_server.json`: tag, config, hash, window seconds and frames, long frames, saturated connection-frames (the sum over connections), and per connection its slot, bytes, bytes per second and saturated frames (`FJsonObject`, serialised in `SaveJson`, `06` §22) |
+| `Dump`: `RequestExit` when every client has left and the CSV future is ready | Each client leaves after writing its report, so an empty `ClientConnections` means every report is on disk. A 30 s timeout covers a client that never sees `Dump` (heavy loss); the server never quits before the asynchronous CSV write has finished. The log says which of the two ended the run |
+| `TickClient` | Watches the replicated phase (on a client, `Phase` holds the phase last seen). Entering `Capture`: records `InTotalBytes` and the clock; leaving it: the end values; counts frames in between. On `Dump`: writes `<run>_client<K>.json` (bytes, bytes per second, frames, fps, its slot), stops directing (so the report is written once) and quits with `-NCLExit` |
+| `FreezeChanges()` (in `UNCLWorkloadSubsystem`) | The workload keeps moving but applies no more changes: the settle period lets the last ones arrive before S3 compares state |
+
+### D3. Tests
+
+S2 adds no C++ automation test: the director has no pure logic left once saturation comes from the engine's own counter (an earlier draft had a `NetCostLab.Bench.SaturationRule` test for a self-made rule; both went with the S2 simplify pass, `07` S2-4). The director is checked by the S2 runs themselves (`09` S2), and `csv_stats.py --selftest` checks the statistics.
+
+### D4. Tools added or changed in S2
+
+| File | What changed, and why |
+|---|---|
+| `Tools\run_bench.py` | The batch runner (adapted from P01's). `CONFIGS` holds C1–C6 as data: Iris on/off for both sides, the server's cvars (`-dpcvars=`), config overrides (`-ini:Engine:`) and arguments. `network_args` sets the rate in its three places (client request, server maximum and internet maximum, `01b` #9) and adds `-PktLoss=` only when loss is asked for (parsed at net-driver start, `NetDriver.cpp:788`, `NetEmulationHelper.cpp:547`). A run: pin and start the server, wait for "listening", pin and start N packaged clients, wait for the server to exit by itself, give the clients 30 s, kill anything left in `finally`, then `collect`. Interleaving: one discarded priming run, then the config order rotates every round. Valid = no failure, server and every client exited with 0, every report readable (`read_json`; an unreadable one makes the run invalid instead of crashing the batch), the CSV holds exactly `--capture-frames` frames, and every client ran between 27.3 and 33 fps (the cap held, and no client starved). Clients get `-NCLClientFPS=30`. The manifest is rewritten after every run, so a crash later keeps the runs already done. The environment record reads the charger state from `root/wmi BatteryStatus.PowerOnline` and the toolchain of the last build from UnrealBuildTool's log. `--dry-run` prints the commands and writes nothing |
+| `Tools\csv_stats.py` | P01's script adapted: the P05 columns by default, `NetFlushMs` derived per frame as `ServerReplicateActors` + `NetworkOutgoing` (`row_sums`; a frame counts only if both cells exist), the `nclruntag` metadata key, the P05 event names in the self-test, and the event-split option removed (P05 captures contain only the window). The EVENTS column is looked up once per capture (`events_index`). A partial capture (no metadata row) drops any header row and unreadable cells instead of failing |
+| `Tools\check_job.py` | `--bench "ARGS"` (repeatable): `run_bench.py` inside the same queue job, after the probes (one loop over both kinds) |
+| `Tools\netlab_env.py` | `MAP`, `PACKAGED_CLIENT`, `COMMON_ARGS`, `IPNETDRIVER` and `REPGRAPH_INI` now live here, shared by `probe_net.py` and `run_bench.py` |

@@ -27,10 +27,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import netlab_env as env  # noqa: E402  (the folder is put on the path explicitly; python -I ignores the script dir)
 
-MAP = "/Engine/Maps/Templates/Template_Default"
+MAP, PACKAGED_CLIENT, COMMON = env.MAP, env.PACKAGED_CLIENT, env.COMMON_ARGS
 CLIENTS = 2
-PACKAGED_CLIENT = os.path.join(env.P05_ROOT, "Build", "Windows", "NetCostLab", "Binaries", "Win64", "NetCostLab.exe")
-COMMON = ["-log", "-unattended", "-nosplash", "-nosound", "-traceautostart=0", "-NoLiveCoding"]
 
 # Each setup: extra arguments for server and clients, plus console commands the server prints at startup as evidence.
 SETUPS = {
@@ -43,9 +41,7 @@ SETUPS = {
         "server_exec": "Net.IsPushModelEnabled,net.Iris.UseIrisReplication,net.Iris.PushModelMode",
     },
     "repgraph": {
-        "args": ["-UseIrisReplication=0",
-                 "-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:ReplicationDriverClassName="
-                 "/Script/ReplicationGraph.BasicReplicationGraph"],
+        "args": ["-UseIrisReplication=0", "-ini:Engine:" + env.REPGRAPH_INI],
         "server_exec": "Net.IsPushModelEnabled,Net.RepGraph.PrintGraph",
     },
     "iris": {

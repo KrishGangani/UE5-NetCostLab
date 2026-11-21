@@ -11,7 +11,7 @@
 
 ---
 
-**Progress (2026-11-21):** Phases 1–3 ✅. **Phase 4 ✅** (F1–F4, plus the re-check F-5 after the Iris sub-object-list fix; `09`). The Phase 2 probe and all Phase 4 checks ran in one queue job (`Tools\foundation_job.py`). **Phase 5:** S1 ✅ (`09`, step S1). Next: **S2**.
+**Progress (2026-11-21):** Phases 1–3 ✅. **Phase 4 ✅** (F1–F4, plus the re-check F-5 after the Iris sub-object-list fix; `09`). The Phase 2 probe and all Phase 4 checks ran in one queue job (`Tools\foundation_job.py`). **Phase 5:** S1 ✅, S2 ✅ (`09`, steps S1 and S2). Next: **S3**.
 
 ## Phase 4: Foundation (no gameplay code yet)
 

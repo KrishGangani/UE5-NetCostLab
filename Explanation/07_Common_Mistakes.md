@@ -1,6 +1,6 @@
 # 07 · Common Mistakes: NetCostLab
 
-**Rule:** for every module, how to **identify**, **prevent** and **debug** the mistakes it invites. Current to **Phase 5, step S1**; later steps add their mistakes.
+**Rule:** for every module, how to **identify**, **prevent** and **debug** the mistakes it invites. Current to **Phase 5, step S2**; later steps add their mistakes.
 
 ---
 
@@ -46,3 +46,18 @@
 | S1-13 | **A view that never turns** | Legacy priority treats everything "behind" a fixed +X direction as less important (×0.2 or ×0.4, `ActorReplication.cpp:67–88`), so priorities reflect an arbitrary axis rather than where the player goes. Our first version moved avatars with `SetActorLocation` only | Turn the avatar to its direction of travel each tick (`LoopFacing`, `SetActorLocationAndRotation`) | The server's `GetPlayerViewPoint` rotation per connection; test `LoopMotionMatchesSpeed` checks `LoopFacing` |
 | S1-14 | **Splitting a Windows command line with `shlex`** | `shlex.split` (POSIX mode) treats `\` as an escape: `-abslog=D:\Logs\s.log` arrives as `-abslog=D:Logss.log` | Split on whitespace outside double quotes and keep backslashes (`check_job.split_args`) | Print the split list before running |
 | S1-15 | **Two quoted arguments with spaces through `cmd /c`** | The step fails in 0.0 s: `'D:\UNREAL' is not recognized as an internal or external command`. With more than two quote characters on the line, `cmd /c` removes the first and the last one, and the path splits at its space. Our first S1 re-check failed exactly so | Pass only one quoted (spaced) argument through `cmd /c`; give further paths relative to a known folder (`run_tests.bat` resolves `LogPath` against `%~dp0`) | The step's own log shows `cmd`'s message; `cmd /?` describes the quote rule |
+
+---
+
+## Director and measurement mistakes (step S2)
+
+| # | Mistake | How you notice it | How to prevent it | How to debug it |
+|---|---|---|---|---|
+| S2-1 | **Emitting the start event in the frame that calls `BeginCapture`** | The CSV has no `BenchStart` event: the capture only starts at the next frame (`CsvProfiler.cpp:3870–3895`), and events are dropped while nothing is captured (`:4744–4746`) | Emit it in the first frame that is captured (`SampleFrame`, frame 1) | `csv_stats.py` prints the events it found per file |
+| S2-2 | **A byte window and a CSV that cover different frames** | Bytes per second and per-frame timings disagree by a frame at each end | Take the byte baseline at the end of the frame that requested the capture, count exactly the captured frames, and request `EndCapture` in the last counted frame (it is still captured, `:4208–4218`). The S2 check compares the CSV's frame count with the director's | `window_frames` in `_server.json` must equal the CSV's data rows |
+| S2-3 | **Sampling connection bytes before the net flush** | Each frame's bytes are the previous frame's; the first and last frames of the window are wrong | Sample at `FWorldDelegates::OnWorldTickEnd`, which runs after `TickFlush` (`LevelTick.cpp:1929` then `:2061`) | Compare the per-frame sum with `OutTotalBytes` deltas over the window |
+| S2-4 | **Defining saturation yourself** | Your "saturated" (here: bytes ≥ 90% of rate × frame time) is not the documented metric (`01` §6.4: `IsNetReady() == false`), and it needs its own clamp rules and tests. Our first S2 version did this; the S2 simplify pass replaced it | Read the engine's per-connection count (`GetSaturationAnalytics().GetNumberOfSaturatedFrames()`, tracked at the end of every connection tick, `NetConnection.cpp:5110`) at the window's start and per frame | `saturated_frames` per connection in `_server.json`; `NetCostLab/SatConnections` per frame in the CSV |
+| S2-5 | **Quitting before the CSV is on disk** | A missing or truncated CSV, now and then | `EndCapture` returns a future; the server quits only when it is ready | The run script marks the run invalid when the CSV is missing or has the wrong frame count |
+| S2-6 | **Hand-built JSON** | A report that Python cannot parse when a path contains a backslash | Write reports with `FJsonObject` and `FJsonSerializer` (`06` §22) | `json.load` in `run_bench.py` raises; the run is invalid |
+| S2-7 | **Two `-ini:Engine:` switches assumed to override each other** | Only one of the settings takes effect | The parser walks every `-ini:` token (`ConfigCacheIni.cpp:2341–2345`), so separate switches are fine; each switch's settings are separated by commas | The server log's config dump (`-ExecCmds` with the key) |
+| S2-8 | **Capping a client's frame rate with `-dpcvars=t.MaxFPS`** | The log says `Set CVar [[t.MaxFPS:30]]`, yet the client runs at 2,000+ fps (our first S2 run) and sends far more packets than a real client | Know that `UGameEngine::Init` re-applies the user settings and writes `FrameRateLimit` (0) into `t.MaxFPS` on every non-dedicated process (`GameEngine.cpp:1249–1250`, `GameUserSettings.cpp:535–538`). Set the cap after start-up (`GEngine->SetMaxFPS` when the world begins play), and make a run invalid when a client's measured fps exceeds the cap | The client report's `fps`; `run_bench.py` records `client_fps_max` |

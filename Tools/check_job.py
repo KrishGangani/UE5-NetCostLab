@@ -8,6 +8,7 @@ Steps (each optional, always in this order; a later step is skipped once an earl
   --package            package.bat Development (needed whenever packaged clients must run new code)
   --smoke              smoke_game.bat packaged
   --probe "ARGS"       probe_net.py ARGS (repeatable): editor-binary server + headless clients
+  --bench "ARGS"       run_bench.py ARGS (repeatable): measured runs with the director (step S2 on)
 
 Every child's output is streamed to the job log and copied to Benchmarks\\Raw\\<batch>\\<step>.log; the summary manifest
 goes to Benchmarks\\Raw\\<batch>_manifest.json (sanitised).
@@ -54,6 +55,7 @@ def main() -> int:
     parser.add_argument("--package", action="store_true")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--probe", action="append", default=[])
+    parser.add_argument("--bench", action="append", default=[])
     args = parser.parse_args()
 
     batch, out_dir = env.new_batch(args.label)
@@ -70,8 +72,9 @@ def main() -> int:
         steps.append(("package", ["cmd", "/c", os.path.join(TOOLS, "package.bat"), "Development"]))
     if args.smoke:
         steps.append(("smoke", ["cmd", "/c", os.path.join(TOOLS, "smoke_game.bat"), "packaged"]))
-    for index, probe in enumerate(args.probe):
-        steps.append((f"probe{index + 1}", PY + [os.path.join(TOOLS, "probe_net.py")] + split_args(probe)))
+    for kind, script in (("probe", "probe_net.py"), ("bench", "run_bench.py")):     # each repeatable, in this order
+        for index, script_args in enumerate(getattr(args, kind)):
+            steps.append((f"{kind}{index + 1}", PY + [os.path.join(TOOLS, script)] + split_args(script_args)))
 
     manifest = {"batch": batch, "purpose": f"step checks '{args.label}'", "engine": env.ENGINE, "steps": {}}
     failed = None

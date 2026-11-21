@@ -3,6 +3,7 @@
 #include "NCLGameMode.h"
 
 #include "Engine/World.h"
+#include "NCLGameState.h"
 #include "NCLPlayerAvatar.h"
 #include "NCLPlayerController.h"
 #include "NCLWorkloadSubsystem.h"
@@ -12,6 +13,7 @@
 ANCLGameMode::ANCLGameMode()
 {
 	PlayerControllerClass = ANCLPlayerController::StaticClass();
+	GameStateClass = ANCLGameState::StaticClass();      // carries the benchmark phase to every client
 	DefaultPawnClass = nullptr;
 }
 

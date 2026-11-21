@@ -329,6 +329,10 @@ void UNCLWorkloadSubsystem::Tick(float DeltaTime)
 			continue;
 		}
 		Drone->SetActorLocation(LoopPosition(DroneLoops[Index], Now));
+		if (bChangesFrozen)
+		{
+			continue;
+		}
 		// At most one change of each kind per drone per tick. After a server hitch, every drone whose time passed
 		// changes on the next tick (a burst that the server CSV shows), and the schedule keeps its phase.
 		if (const int32 Number = TakeDue(StateSchedules[Index], Now, DroneChangePeriod); Number != INDEX_NONE)
@@ -341,14 +345,18 @@ void UNCLWorkloadSubsystem::Tick(float DeltaTime)
 		}
 	}
 
-	for (int32 Index = 0; Index < Props.Num(); ++Index)
+	// Props never move, so once the changes are frozen there is nothing to do for them.
+	if (!bChangesFrozen)
 	{
-		// The schedule first: about one prop in 600 is due per tick, so most props are never touched.
-		if (const int32 Number = TakeDue(ToggleSchedules[Index], Now, PropTogglePeriod); Number != INDEX_NONE)
+		for (int32 Index = 0; Index < Props.Num(); ++Index)
 		{
-			if (ANCLProp* Prop = Props[Index]; IsValid(Prop))
+			// The schedule first: about one prop in 600 is due per tick, so most props are never touched.
+			if (const int32 Number = TakeDue(ToggleSchedules[Index], Now, PropTogglePeriod); Number != INDEX_NONE)
 			{
-				Prop->ApplyToggle(OccupiedSlotAt(MakeStream(Settings.Seed, EStream::PropToggle, Index, Number).FRand()));
+				if (ANCLProp* Prop = Props[Index]; IsValid(Prop))
+				{
+					Prop->ApplyToggle(OccupiedSlotAt(MakeStream(Settings.Seed, EStream::PropToggle, Index, Number).FRand()));
+				}
 			}
 		}
 	}

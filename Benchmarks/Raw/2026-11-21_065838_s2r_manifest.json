@@ -1,0 +1,91 @@
+{
+  "batch": "2026-11-21_065838_s2r",
+  "purpose": "step checks 's2r'",
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "steps": {
+    "build_editor": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLabEditor",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 12.7,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "build_game": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLab",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 17.0,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "tests": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\run_tests.bat",
+        "NetCostLab",
+        "..\\Benchmarks\\Raw\\2026-11-21_065838_s2r\\tests_editor.log"
+      ],
+      "exit_code": 0,
+      "seconds": 16.4,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": [],
+      "results": {
+        "NetCostLab.Workload.ChangeStreamsArePure": "Success",
+        "NetCostLab.Workload.LoopMotionMatchesSpeed": "Success",
+        "NetCostLab.Workload.PlanIsDeterministic": "Success",
+        "NetCostLab.Workload.PlanStaysInArena": "Success",
+        "NetCostLab.Workload.ScheduleKeepsPhase": "Success"
+      }
+    },
+    "package": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\package.bat",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 58.8,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "bench1": {
+      "command": [
+        "%USERPROFILE%\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "-I",
+        "-u",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\run_bench.py",
+        "--configs",
+        "C1,C4",
+        "--clients",
+        "8",
+        "--runs",
+        "1",
+        "--no-prime",
+        "--label",
+        "s2rb"
+      ],
+      "exit_code": 0,
+      "seconds": 199.9,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    }
+  }
+}

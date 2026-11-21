@@ -51,6 +51,10 @@ public:
 	/** CRC of the seed, the counts and every spawn parameter: equal hashes mean equal workloads (SC1). */
 	uint32 GetWorkloadHash() const { return WorkloadHash; }
 
+	/** Server: stops every gameplay change for the rest of the run; motion continues. The director calls it after the
+	 *  measured window, so the last changes can reach every client before the run's state is compared (S3). */
+	void FreezeChanges() { bChangesFrozen = true; }
+
 	/** A circle in the horizontal plane, travelled at a constant angular speed (negative = clockwise). */
 	struct FLoop
 	{
@@ -130,6 +134,7 @@ private:
 	void LogCounts() const;
 
 	FSettings Settings;
+	bool bChangesFrozen = false;
 	uint32 WorkloadHash = 0;
 	double NextCountLogTime = 0.0;
 

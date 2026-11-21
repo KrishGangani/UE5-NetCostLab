@@ -12,7 +12,8 @@ public class NetCostLab : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
 
-		// NetCore: the push-model macros (Net/Core/PushModel/PushModel.h), used only by our .cpp files.
-		PrivateDependencyModuleNames.AddRange(new string[] { "NetCore" });
+		// NetCore: the push-model macros (Net/Core/PushModel/PushModel.h); Json: the director's run reports.
+		// Both are used only by our .cpp files.
+		PrivateDependencyModuleNames.AddRange(new string[] { "NetCore", "Json" });
 	}
 }

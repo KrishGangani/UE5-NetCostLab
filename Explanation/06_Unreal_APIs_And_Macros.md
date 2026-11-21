@@ -1,6 +1,6 @@
 # 06 · Unreal APIs And Macros: NetCostLab
 
-**Rule:** only APIs this project actually uses, each in the same eight points: 1 what it is · 2 why it exists · 3 how it works · 4 when to use it · 5 when not to · 6 common mistakes · 7 a small example · 8 how this project uses it. Every engine claim is checked in the UE 5.8.4 source. Current to **Phase 5, step S1**; later steps add their APIs.
+**Rule:** only APIs this project actually uses, each in the same eight points: 1 what it is · 2 why it exists · 3 how it works · 4 when to use it · 5 when not to · 6 common mistakes · 7 a small example · 8 how this project uses it. Every engine claim is checked in the UE 5.8.4 source. Current to **Phase 5, step S2**; later steps add their APIs.
 
 | # | API | First used in |
 |---|---|---|
@@ -237,3 +237,76 @@
 6. **Mistakes:** using it per frame on large worlds.
 7. **Example:** see `UNCLWorkloadSubsystem::LogCounts`.
 8. **Here:** the optional `-NCLCountLog=SEC` counts.
+
+## 19. The CSV profiler from code: `FCsvProfiler::BeginCapture` / `EndCapture`, `CSV_DEFINE_CATEGORY`, `CSV_CUSTOM_STAT`, `CSV_EVENT`, `CSV_METADATA`
+
+1. **What:** the engine's per-frame CSV recorder, driven from C++: start and stop a capture, add our own columns, mark frames with events, and attach key-value metadata to the file.
+2. **Why:** the server must open the measured window itself, at the moment its own phase logic decides, and the file must carry our per-frame numbers next to the engine's timers.
+3. **How:**
+   - `FCsvProfiler::Get()->BeginCapture(NumFrames, Folder, Filename, Flags)` (`ProfilingDebugging/CsvProfiler.h:519–522`) only **queues** a start command; it takes effect at the start of the next frame (`CsvProfiler.cpp:3870–3895`).
+   - `EndCapture()` (`:529`) queues a stop that is processed at the end of the current frame, which is still captured (`CsvProfiler.cpp:4208–4218`); the file is written asynchronously, and the returned `TSharedFuture<FString>` becomes ready with its name.
+   - Without the `CompressOutput` flag the file is a plain `.csv` (`csv.CompressionMode` default −1, `CsvProfiler.cpp:184–190`); the folder and the file name are used as given, the extension is set to `.csv` (`:3973–3976`).
+   - `CSV_DEFINE_CATEGORY(NetCostLab, true)` in one `.cpp` creates the category, enabled by default; `CSV_CUSTOM_STAT(NetCostLab, OutBytes, Value, ECsvCustomStatOp::Set)` writes the column `NetCostLab/OutBytes` for this frame.
+   - `CSV_EVENT(NetCostLab, TEXT("BenchStart"))` is recorded only while a capture runs (`RecordEventfInternal`, `CsvProfiler.cpp:4744–4746`).
+   - `CSV_METADATA(Key, Value)` (`CsvProfiler.h:85`) ends up in the file's last row (lower-cased keys in `csv_stats.py`).
+   - Everything compiles to nothing where `CSV_PROFILER` is 0 (Shipping, `CsvProfilerConfig.h:31`).
+4. **When:** a measured window that code decides; per-frame values of our own.
+5. **When not:** `-ExitAfterCsvProfiling` would end the process when the capture ends, before the settle and the state dump (`01` §7.1). Per-frame `UE_LOG` instead of a CSV column (costly and hard to parse).
+6. **Mistakes:** emitting the start event in the same frame as `BeginCapture` (it is dropped: the capture is not running yet); quitting before the asynchronous write has finished; assuming the CSV and a hand-counted window cover the same frames without checking.
+7. **Example:** `FCsvProfiler::Get()->BeginCapture(-1, OutDir, RunTag + TEXT("_server.csv"));`
+8. **Here:** `UNCLBenchSubsystem`: `BeginCapture` when the warm-up ends, `BenchStart` in the first captured frame, four `NetCostLab/…` columns per frame, `EndCapture` after exactly `-NCLCaptureFrames` frames, and the server quits only when the future is ready.
+
+## 20. `FWorldDelegates::OnWorldTickEnd`
+
+1. **What:** a global multicast delegate broadcast at the very end of `UWorld::Tick` (`Engine/World.h:4519–4520`).
+2. **Why:** it runs **after** the net driver's flush (`LevelTick.cpp:1929` then `:2061`), so the bytes each connection sent this frame are already counted.
+3. **How:** `AddUObject(this, &UClass::Function)` returns an `FDelegateHandle`; the signature is `(UWorld*, ELevelTick, float)`. It fires for every world, so the handler checks `InWorld == GetWorld()`.
+4. **When:** per-frame sampling of what the frame did.
+5. **When not:** anything that must happen before replication (use a normal tick).
+6. **Mistakes:** forgetting `Remove(Handle)` in `Deinitialize` (a dangling binding after the world is gone); not filtering by world (PIE and multiple worlds).
+7. **Example:** `TickEndHandle = FWorldDelegates::OnWorldTickEnd.AddUObject(this, &UNCLBenchSubsystem::OnWorldTickEnd);`
+8. **Here:** the director's frame-by-frame measured window: baseline, per-connection bytes, saturation, busy ms, and the end of the window.
+
+## 21. `UNetConnection` counters: `OutTotalBytes`, `InTotalBytes`, `GetSaturationAnalytics()`; `UNetDriver::ClientConnections` / `ServerConnection`
+
+1. **What:** each connection's running totals of bytes sent and received (`int32`, `Engine/NetConnection.h:571`), and the engine's own saturation statistics per connection (`GetSaturationAnalytics()`, `NetConnection.h:1624`, an `FNetConnectionSaturationAnalytics`, `Net/NetAnalyticsTypes.h:217–290`).
+2. **Why:** bytes per second per client, and how often a connection was saturated, with no tracing.
+3. **How:** `OutTotalBytes += PacketBytes` for every packet flushed (`NetConnection.cpp:2586`), headers included; never reset. At the end of every connection tick the engine calls `SaturationAnalytics.TrackFrame(!IsNetReady())` (`NetConnection.cpp:5110`), unconditionally and in every replication system, so `GetNumberOfSaturatedFrames()` counts the frames that ended with the connection over its bandwidth budget. Read it at two points and subtract; `ResetSaturationAnalytics()` exists, but resetting engine state is not needed. The server's connections are `NetDriver->ClientConnections`; a client's single connection is `NetDriver->ServerConnection`.
+4. **When:** per-connection measurements at a defined point in the frame.
+5. **When not:** as an exact payload size: it counts whole packets, so headers and acks are included (the same in every configuration).
+6. **Mistakes:** sampling before the flush (you count last frame's packets); writing your own saturation rule from bytes and rate when the engine already counts `IsNetReady() == false` per connection (our first S2 version did, `07` S2-4).
+7. **Example:** `const int64 Sent = Connection->OutTotalBytes - Sample.BytesLastFrame;`
+8. **Here:** the server's per-connection samples and the clients' received bytes.
+
+## 22. JSON output: `FJsonObject`, `FJsonValueObject`, `FJsonSerializer`, `TJsonWriterFactory`
+
+1. **What:** the engine's JSON DOM and writer (module `Json`).
+2. **Why:** the run reports are read by Python; hand-built `Printf` JSON breaks on a backslash in a path or a quote in a name.
+3. **How:** `MakeShared<FJsonObject>()`, then `SetStringField`, `SetNumberField`, `SetArrayField` (an array of `TSharedPtr<FJsonValue>`, e.g. `MakeShared<FJsonValueObject>(Entry)`); `FJsonSerializer::Serialize(Object, TJsonWriterFactory<>::Create(&OutString))`. Numbers are doubles.
+4. **When:** files read by tools.
+5. **When not:** per-frame logging in a measured window (allocation); the reports are written in the Settle/Dump phases, after the window.
+6. **Mistakes:** forgetting the `Json` module dependency (link errors); storing a 64-bit count beyond 2^53 as a double (not an issue for bytes per run).
+7. **Example:** `Report->SetNumberField(TEXT("window_frames"), WindowFrames);`
+8. **Here:** `<run>_server.json` and `<run>_clientNN.json`.
+
+## 23. Game state as a replicated channel for run phases: `GameStateClass`, `AGameStateBase`, `ForceNetUpdate`
+
+1. **What:** the game mode's `GameStateClass` picks the game-state actor every world spawns; `AGameStateBase` is always relevant (`bAlwaysRelevant = true`, `GameStateBase.cpp:26`), and Iris does not spatially filter `AInfo` actors (`BaseEngine.ini:1519`).
+2. **Why:** headless clients need to know when the measured window starts and ends, with nothing but replication.
+3. **How:** a push-based `UPROPERTY(Replicated)` phase; the setter marks it dirty and calls `ForceNetUpdate()` so it is considered on the next net update instead of waiting for the actor's update interval.
+4. **When:** a small amount of world-wide state every client needs.
+5. **When not:** per-player data (player state) or anything frequent.
+6. **Mistakes:** a game mode derived from `AGameModeBase` with a game state derived from `AGameState` (or the reverse): the engine logs an error ("Mixing AGameStateBase with AGameMode is not compatible", `GameMode.cpp:68`; the reverse at `GameState.cpp:31`) and the game state's match logic does not work.
+7. **Example:** `GameStateClass = ANCLGameState::StaticClass();`
+8. **Here:** `ANCLGameState::BenchPhase`, read by the client side of the director.
+
+## 24. `FPlatformMisc::RequestExit`
+
+1. **What:** asks the engine to shut down at the end of the frame (`RequestExit(bForce, CallSite)`).
+2. **Why:** every process of a run must end by itself, so the run script sees real exit codes and nothing is left running.
+3. **How:** with `bForce = false`, the engine loop ends normally and the process exits with 0 unless an error was flagged.
+4. **When:** a process that has finished its job.
+5. **When not:** to abort on an error (log an error instead, so the run is marked invalid).
+6. **Mistakes:** exiting before asynchronous writes (the CSV) finish.
+7. **Example:** `FPlatformMisc::RequestExit(false, TEXT("UNCLBenchSubsystem"));`
+8. **Here:** the server after Dump, once every client has left (or after a 30 s timeout) and the CSV future is ready; each client after writing its report.

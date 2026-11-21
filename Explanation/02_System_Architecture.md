@@ -115,7 +115,7 @@ The game later calls `SetFocusTarget(Handle, TargetNetHandle)` only when gamepla
 | `ANCLDrone` | `AActor` | Replicated movement plus push-based gameplay fields (`State` struct: `Seq`, `Mode`, `TargetSlot`, `Health`; four loadout fields; `DroneIndex` sent once). On clients, overrides `OnRep_ReplicatedMovement` and `OnRep_State` to record arrivals (S3). On the server, overrides `AActor::GetNetPriority` for **C6**: when `ncl.LegacyFocusPriority` is on and the viewer's view target is the drone's focus avatar, it returns the engine's own view-target priority `NetPriority × Time × 4` (`ActorReplication.cpp:56–59`); otherwise `Super` (S5) |
 | `ANCLProp` | `AActor` | Stationary; four push-based fields that toggle on a seeded schedule |
 | `UNCLWorkloadSubsystem` | `UTickableWorldSubsystem` (works on the server; on clients it only counts arrivals when asked) | Seeded spawn from a **pure plan** (`MakePlan`: loops, prop positions, hash; tested without a world); each frame moves drones and avatars as a function of server time, applies the change schedule (calling `MARK_PROPERTY_DIRTY_FROM_NAME`) with one random stream **per event**, seeded from (seed, kind, object, event number), so no value depends on tick timing; records server truth; computes the workload hash; in C5 assigns drones to the prioritiser (retrying until each has an Iris handle) and updates focus targets when a drone retargets |
-| `UNCLBenchSubsystem` | `UTickableWorldSubsystem` (server and client) | The director. Reads `-NCL…=` arguments; server: waits for N clients, warm-up, `CSV_EVENT(BenchStart)`, capture, settle, dump, exit; samples per-connection `OutTotalBytes` and busy ms at `FWorldDelegates::OnWorldTickEnd` (after the net flush, `01b` #10) and publishes CSV stats; client: event recorder, frame-rate check, dumps on `Dump`, exits |
+| `UNCLBenchSubsystem` | `UTickableWorldSubsystem` (server and client) | The director. Reads `-NCL…=` arguments; server: waits for N clients, warm-up, `BeginCapture`, exactly 1,800 captured frames (`BenchStart` in the first), `EndCapture`, changes frozen, settle, dump, exit; samples per-connection `OutTotalBytes` and busy ms at `FWorldDelegates::OnWorldTickEnd` (after the net flush, `01b` #10) and publishes CSV stats; client: event recorder, frame-rate check, dumps on `Dump`, exits |
 
 **Why a world subsystem for the workload and the director:** the project has no hand-authored map (an engine template map, as in P01), so nothing would place a manager actor; a world subsystem has exactly the world's lifetime. **Why two subsystems:** the workload is server-only and is the same in every configuration; the director also runs on clients and owns measurement. Keeping them apart means the measuring code cannot change the workload.
 
@@ -174,13 +174,13 @@ sequenceDiagram
   W->>WL: Tick (after PostPhysics)
   WL->>WL: move drones + avatars to f(server time); apply schedule; MARK_PROPERTY_DIRTY
   WL->>GP: SetFocusTarget for drones that retargeted (C5 only)
-  W->>BS: Tick: phase control, CSV_EVENT(BenchStart) when due
+  W->>BS: Tick: phase control, BeginCapture when the warm-up ends
   W->>ND: TickFlush [CSV: NetworkOutgoing]
   ND->>ND: ServerReplicateActors [CSV: ServerReplicateActors]
   Note over ND: legacy/graph: consider, compare, prioritise, serialise<br/>Iris: views, poll/copy, filter, prioritise, write
   ND->>GP: Prioritize(batch, connection, view): Super::Prioritize then + boost
   ND->>ND: connection ticks: send packets, refill bandwidth
-  W->>BS: OnWorldTickEnd: per-connection bytes this frame, busy ms of last frame
+  W->>BS: OnWorldTickEnd: per-connection bytes this frame, busy ms of last frame; EndCapture after frame 1,800
   W->>W: idle sleep to 33.3 ms (FApp idle time)
 ```
 

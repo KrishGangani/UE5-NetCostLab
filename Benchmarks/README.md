@@ -4,10 +4,10 @@ Every number in this project's write-up must trace back to a file in this folder
 
 ## Measurement rules
 
-1. **Baselines first.** C1–C4 are captured (S5) before the gameplay prioritiser exists, on the same workload, binaries and machine as every later run.
+1. **Baselines first.** C1–C4 and C6 are captured (S5) before the gameplay prioritiser exists, on the same workload, binaries and machine as every later run.
 2. **One server binary for all six configurations:** the Development **editor binary** in dedicated-server mode (`UnrealEditor-Cmd.exe … -server`), uncooked. The launcher engine cannot build a Server target, a packaged game can never be a dedicated server, and packaged games on the launcher engine have no push model ([01b](../Explanation/01b_Research_Findings.md) #1–#3). Clients are the **packaged Development game**, headless (`-nullrhi`): Phase 4 check F4 showed they join the editor-binary server in both systems at ≈ 0.35–0.54 GB each, against ≈ 1.7 GB for an editor-binary client (`09`).
 3. **Real time, not a fixed step.** The server runs at its 30 Hz cap, clients at 30 fps. A fixed-step server would simulate faster than real time while bandwidth and timeouts follow the wall clock (`01b` #4).
-4. **The server opens and closes the capture window itself** (`CSV_EVENT(BenchStart)` after all clients joined and a 20 s warm-up; 1,800 captured frames = 60 s).
+4. **The server opens and closes the capture window itself:** its director calls `BeginCapture` after all clients joined and a 20 s warm-up, and `EndCapture` after exactly 1,800 frames (60 s at 30 Hz). The CSV events `BenchStart` and `BenchEnd` mark the first and last captured frames.
 5. **Core pinning, recorded per run:** the server on the performance cores (mask `0xFFFF`), the clients on the efficiency cores (`0xFF0000`). The run script pins itself to the right mask right before starting each process (the child inherits it from its first instruction), starts the real executable directly with `Popen` (so its own exit code is recorded), and records the mask each process actually inherited.
 6. **One discarded priming run per batch**, then **runs per combination = the number of configurations in the batch**, interleaved, with the configuration order rotated every round (Scenario A: 6 configs → 6 runs; Scenario B: 4 configs → 4 runs).
 7. **Statistics:** median, p95 and p99 per run (linear-interpolation percentiles), then the median across runs with the [min–max] across runs. Slopes are least-squares fits over N = 8/16/32 and are never extrapolated.

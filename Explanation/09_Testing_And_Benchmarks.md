@@ -109,3 +109,64 @@ Manifests in `Benchmarks\Raw\`: `2026-11-21_032353_s1_manifest.json` (steps), `2
   - Computing the angle once for position and facing: at most 32 avatars.
 
 **What S1 taught us:** the first expectation that failed was ours. "Every client sees every prop" ignored the cull distance that 01 §6.1 itself sets; the plateau counts are the relevancy rule giving the same result per client in C1 and C4.
+
+---
+
+## Phase 5 · Step S2: the director, the telemetry and the run script (2026-11-21)
+
+**How it ran:** two queue jobs, each `Tools\check_job.py` with a `--bench` step running `Tools\run_bench.py`:
+
+```
+python -I -u Tools\check_job.py --label s2 --build --tests NetCostLab --package
+    --bench "--configs C1,C4 --clients 8 --runs 1 --no-prime --label s2b"
+```
+
+Each bench step ran one C1 and one C4 run at N = 8, Scenario A (1 MB/s per client), 20 s warm-up, 1,800 captured frames, 5 s settle. There was no priming run: these are tool checks, not measurements. Masks were read back for every process: server `0xFFFF`, all 8 clients `0xFF0000`. The numbers below show that the tools work. **They are not results**, and nothing is concluded from them about the configurations.
+
+| # | Check | Result |
+|---|---|---|
+| S2-a | **First job** `20261121_050455_082254` (batches `2026-11-21_053124_s2`, `…_053310_s2b`) | Both targets ✅ (16.4 s, 17.1 s), **0 errors, 0 warnings**; 6 of 6 tests passed (then including `NetCostLab.Bench.SaturationRule`, removed later). Package ✅ 55.7 s. Both runs valid by the rules then in force: exactly 1,800 frames; `BenchStart`, `BenchEnd` and one `GC` event in the CSV; metadata `NCLRunTag`, `NCLConfig`, `NCLClients=8`, `NCLWorkloadHash=0x680F4C7A`; every process exited 0 by itself. ❌ **Finding: the clients were not capped.** They ran at 2,036–2,217 fps although `-dpcvars=t.MaxFPS=30` was set and logged (`07` S2-8, fixed in the director) |
+| S2-b | `code-review` (medium) and `simplify` on the S2 code | 10 review findings and the four simplify reviews (audit trail below). The largest change: saturation now comes from the engine's own per-connection count (`IsNetReady() == false`, `NetConnection.cpp:5110`), which is the metric `01` §6.4 defines, instead of a self-made 90%-of-allowance rule (`07` S2-4) |
+| S2-c | **Re-check** `20261121_055446_7732f1` (batches `2026-11-21_065838_s2r`, `…_070023_s2rb`), 0 errors in the job | Both targets ✅ (12.7 s, 17.0 s), **0 errors, 0 warnings**, with the final S2 source. 5 of 5 tests passed (S2 adds none, `05` D3). Package ✅ 58.8 s, 0 errors, 0 warnings. `csv_stats.py --selftest` ✅ |
+| S2-d | **Exactly 1,800 captured frames** | ✅ C1 and C4: 1,800 data rows each, finalised; `window_frames` in `_server.json` = 1,800, so the byte window and the CSV cover the same frames (`07` S2-2). Window 60.0 s; 0 long frames |
+| S2-e | **The CSV has the columns we need** | ✅ `Exclusive/GameThread/ServerReplicateActors`, `…/NetworkOutgoing`, `…/NetworkIncoming`, `FrameTime` and our `NetCostLab/BusyMsPrevFrame`, `/OutBytes`, `/SatConnections`, `/Clients`, in legacy (C1) **and** Iris (C4). `NetFlushMs` derived for all 1,800 frames |
+| S2-f | **Every process exits by itself** | ✅ Server exit 0 in both runs, logging `NCL bench: done (all clients left)`: every client wrote its report and disconnected before the server quit. All 16 client exits 0 |
+| S2-g | **Client frame cap** | ✅ Every client 29.98–29.99 fps in both runs (was 2,000+ in S2-a) |
+| S2-h | **Bytes: server and client agree** | ✅ Median bytes per second per client 67,603 (server, `OutTotalBytes`) vs 67,610 (clients, `InTotalBytes`) in C1, and 43,514 vs 43,502 in C4. 0 saturated connection-frames at 1 MB/s (SC2's condition holds at N = 8) |
+| S2-i | **Environment record** | ✅ CPU, RAM, OS build, power plan, `on_ac_power: True` (from `PowerOnline`), toolchain of the last build `MSVC 14.44.35229, Windows SDK 10.0.22621.0` (from the UnrealBuildTool log), masks |
+
+**A side effect worth knowing, measured in S2-a and S2-c with the same workload and binaries:** the uncapped clients made the server's net flush more expensive. C1's median `NetFlushMs` was 6.27 ms with clients at about 2,100 fps and 3.88 ms with clients at 30 fps; C4's was 1.13 ms and 0.88 ms. The ack traffic of a client scales with its frame rate. That is why `run_bench.py` now marks a run invalid when any client runs outside 27.3–33 fps.
+
+**Audit trail for S2:**
+- `code-review` (medium) raised 10 findings: 4 important, 6 nits. All fixed except the one about the commit (docs were staged with this commit):
+  - **important:** an unreadable report crashed the whole batch and lost the manifest. Reports are now read by `read_json`, which makes the run invalid; the manifest is also rewritten after every run;
+  - **important:** `on_ac_power` was derived from `Win32_Battery.BatteryStatus == 2`, which is false on a fully charged laptop on AC. It now reads `root/wmi BatteryStatus.PowerOnline`;
+  - **important:** the server quit a fixed 3 s after `Dump`. It now waits until every client has left (each leaves after writing its report), with a 30 s timeout;
+  - **important:** validity checked only that clients were not above the cap. It now also requires ≥ 27.3 fps and every client exit code 0;
+  - **nit:** `csv_stats.py` failed on a partial capture that has an end header but no metadata row. It now drops such rows and unreadable cells;
+  - **nit:** the tick length was a 1/30 constant. It is now read from `NetServerMaxTickRate` when the window opens;
+  - **nit:** PIE client worlds would overwrite each other's reports. The director now runs in game worlds only;
+  - **nit:** the `-NCLConfig` comment was out of date;
+  - **nit:** the compiler string was hard-coded. It is now read from the last UnrealBuildTool log.
+- `simplify` (4 parallel read-only reviews: reuse, simplification, efficiency, altitude). Applied:
+  - saturation from `GetSaturationAnalytics()` (two reviews independently), which removed `IsSaturated`, its test and the allowance clamp;
+  - the total of saturated frames derived from the per-connection counts;
+  - the client keeps its last-seen phase in `Phase`, and its "report written" flag is replaced by `bDirecting = false`;
+  - `ViewedAvatar`, `WorkloadHashText`, and `SaveJson` that serialises;
+  - `FrameSeconds` reused for the busy time;
+  - `FreezeChanges()` instead of `SetChangesFrozen(bool)`, and the props loop skipped as a whole when frozen;
+  - in `csv_stats.py`, the EVENTS index looked up once per capture, and the dead one-value branch removed;
+  - the run constants (`MAP`, `PACKAGED_CLIENT`, `COMMON_ARGS`, `IPNETDRIVER`, `REPGRAPH_INI`) shared through `netlab_env.py`;
+  - `csv_stats.summarize` for the per-client rates;
+  - the server-log path built once;
+  - one loop for `--probe` and `--bench` in `check_job.py`.
+- Skipped, with reasons:
+  - `-ini:GameUserSettings:…FrameRateLimit=30` instead of `SetMaxFPS`: the user-settings file is loaded, version-checked and saved by every client process, 32 of them sharing one packaged build's `Saved\` folder. The in-game cap is set after all of that and is checked by every run;
+  - `BeginCapture(N)` with the CSV profiler's first-frame and end delegates instead of our frame count: our count is explicit and S2-d shows it equals the CSV's;
+  - deriving "joined" from the workload's avatars: the director measures connections, so it counts from the connection side;
+  - dropping the `NetCostLab/Clients` column in favour of `Replication/NumConnections`: several `Replication` CSV stats are legacy-only (`BaseEngine.ini:3805–3825`);
+  - a shared "run a session" helper for `probe_net.py` and `run_bench.py`: their life cycles differ (the probe holds and samples memory, the bench waits for the server to finish);
+  - one PowerShell call instead of five: once per batch;
+  - logging the window-closed line one frame later: one line in 1,800 frames.
+
+**What S2 taught us:** a setting that is logged as applied is not necessarily in force. The clients' cap was overwritten during engine start-up, and only the measured frame rate in the client reports showed it. Every run now checks the clients' frame rate itself.
