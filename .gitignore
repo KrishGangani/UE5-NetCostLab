@@ -20,6 +20,7 @@ __pycache__/
 
 # Work in progress parked outside the build (code for a later step); never committed.
 _wip/
+Portfolio/
 
 # Packaged builds stay out of git.
 Build/
