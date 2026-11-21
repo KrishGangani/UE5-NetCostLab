@@ -81,7 +81,7 @@ D:\UNREAL PORTFOLIO\P05_NetCostLab\Tools\                    ← Python: run orc
 | Class | Kind / base | Responsibility | Why it exists, and what we rejected |
 |---|---|---|---|
 | `UNCLGameplayPrioritizerConfig` | `UCLASS(Transient, Config=Engine)` : `USphereNetObjectPrioritizerConfig` | The sphere settings it inherits, plus `UPROPERTY(Config) float FocusPriorityBoost = 2.0f` | The sphere `Init` requires a `USphereNetObjectPrioritizerConfig` (`CastChecked`, `01b` #8). Deriving keeps every distance setting identical to C4's default |
-| `UNCLGameplayPrioritizer` | `UCLASS(Transient)` : `USphereNetObjectPrioritizer` | Overrides `Init`, `Deinit`, `OnMaxInternalNetRefIndexIncreased`, `AddObject`, `RemoveObject`, `Prioritize`. Public API for server game code: `bool Assign(UReplicationSystem&, FNetObjectPrioritizerHandle Self, FNetRefHandle)`, `bool SetFocusTarget(FNetRefHandle Object, FNetHandle Target)`, `ClearFocusTarget`, counters | *Rejected:* subclassing `UNetObjectPrioritizer` directly (would re-implement the distance model and change two factors); reading game data through private Iris headers like the owner-boost prioritiser does (not public API, not exported, `01b` #7); custom rep tags (test-only in 5.8, `01b` #7) |
+| `UNCLGameplayPrioritizer` | `UCLASS(Transient)` : `USphereNetObjectPrioritizer` | Overrides `Init`, `Deinit`, `OnMaxInternalNetRefIndexIncreased`, `AddObject`, `RemoveObject`, `Prioritize`. Public API for server game code: `bool Assign(UReplicationSystem&, FNetObjectPrioritizerHandle Self, FNetRefHandle)`, `bool SetFocusTarget(FNetRefHandle Object, FNetHandle Target)`, `ClearFocusTarget`, `GetAssignFailures()`, `ConsumeBoostCount()`, and the pure `static ApplyFocusBoost(…)`. Config: `UNCLGameplayPrioritizerConfig : USphereNetObjectPrioritizerConfig` with `FocusPriorityBoost` | *Rejected:* subclassing `UNetObjectPrioritizer` directly (would re-implement the distance model and change two factors); reading game data through private Iris headers like the owner-boost prioritiser does (not public API, not exported, `01b` #7); custom rep tags (test-only in 5.8, `01b` #7) |
 
 **How the prioritiser learns which object is which (the identity problem, `01b` #7).** `AddObject` and `Prioritize` see only Iris's internal object index, never the actor or its `FNetRefHandle`, and no public API converts between them for prioritisers. But `UReplicationSystem::SetPrioritizer(Handle, PrioritizerHandle)` calls our `AddObject` **synchronously, inside the same call**. So:
 
@@ -93,16 +93,16 @@ bool UNCLGameplayPrioritizer::Assign(UReplicationSystem& System, FNetObjectPrior
     const bool bSet = System.SetPrioritizer(Handle, Self);        // public API; calls AddObject synchronously (5.8.4)
     bCapturing = false;
     if (!bSet || CapturedIndex == InvalidIndex) { ++AssignFailures; return false; }   // never boost on a guess
-    HandleByIndex[CapturedIndex] = Handle;  IndexByHandle.Add(Handle, CapturedIndex);
+    IndexByHandle.Add(Handle, CapturedIndex);
     return true;
 }
 ```
 
 The prioritiser's handle comes from game code because the prioritiser cannot know it: Iris names each instance with `MakeUniqueObjectName(…, Definition.PrioritizerName)` and keeps the definition name separately (`ReplicationPrioritization.cpp:903–923`), so the object's own name may carry a suffix. The same lines show that each prioritiser gets its **own** config object, created from the config class, whose defaults come from the class's `Config=Engine` section; that is how `FocusPriorityBoost` is set from `DefaultEngine.ini`.
 
-The game later calls `SetFocusTarget(Handle, TargetNetHandle)` only when gameplay changes (a map lookup, not per frame). `Prioritize` reads a dense `TArray<FNetHandle> FocusByIndex`. If a future engine version makes `AddObject` deferred, `Assign` fails loudly (counter + error log) and the object keeps plain sphere priority, so C5 silently becoming C4 is impossible to miss.
+The game later calls `SetFocusTarget(Handle, TargetNetHandle)` only when gameplay changes (a map lookup, not per frame). `Prioritize` reads a dense `TArray<uint64> FocusIdByIndex` (the target's `FNetHandle::GetId()`, 0 = none): plain ids, so the boost can be tested without creating engine handles. If a future engine version makes `AddObject` deferred, `Assign` fails loudly (counter + error log) and the object keeps plain sphere priority, so C5 silently becoming C4 is impossible to miss.
 
-**Telemetry:** a CSV category `NCLPrioritizer` with `BoostedPerFrame` and `AssignFailures`, published once per frame by the game's bench subsystem (not from inside `Prioritize`, which runs per connection).
+**Telemetry (as built):** the director writes `NetCostLab/GameplayFocusBoosts` (C5) and `NetCostLab/LegacyFocusBoosts` (C6) per frame, read once per frame through `ConsumeBoostCount` (never from inside `Prioritize`, which runs per connection), and `c5_assigned`, `c5_pending`, `c5_assign_failures` in `<run>_server.json`.
 
 ### 4.2 Game module `NetCostLab` (8 classes)
 
@@ -112,9 +112,11 @@ The game later calls `SetFocusTarget(Handle, TargetNetHandle)` only when gamepla
 | `ANCLGameState` | `AGameStateBase` | Replicates the run phase (`ENCLBenchPhase`: Waiting, WarmUp, Capture, Settle, Dump) so headless clients know when to start and stop logging and when to write their files and quit |
 | `ANCLPlayerController` | `APlayerController` | Overrides `GetPlayerViewPoint` to return its view target's (the avatar's) location and rotation on the server, so the view used by every system is server-determined and identical (`01b` #12). The avatar faces its direction of travel, so the view looks where the player walks (legacy priority depends on the view direction). It also carries the player's slot to its owning client (`COND_OwnerOnly`), which the client's measurement needs (S3) |
 | `ANCLPlayerAvatar` | `AActor` | The server-driven stand-in for one player: replicated movement, its `PlayerSlot` (sent once). **Not a pawn and never possessed** (changed in S1): a possessed pawn is an autonomous proxy on its owner, which `COND_SimulatedOrPhysics` movement never reaches, and possession brings controller/pawn replication the study does not need. Being the controller's view target is all the replication views need (`NetConnection.cpp:861–865`) |
-| `ANCLDrone` | `AActor` | Replicated movement plus push-based gameplay fields (`State` struct: `Seq`, `Mode`, `TargetSlot`, `Health`; four loadout fields; `DroneIndex` sent once). On clients, `OnRep_State` broadcasts each state arrival; the director records it (S3). Positions need no arrival hook: the client's director compares every drone's shown position with the true one each frame (S3 design change, `05` E1). On the server, overrides `AActor::GetNetPriority` for **C6**: when `ncl.LegacyFocusPriority` is on and the viewer's view target is the drone's focus avatar, it returns the engine's own view-target priority `NetPriority × Time × 4` (`ActorReplication.cpp:56–59`); otherwise `Super` (S5) |
+| `ANCLDrone` | `AActor` | Replicated movement plus push-based gameplay fields (`State` struct: `Seq`, `Mode`, `TargetSlot`, `Health`; four loadout fields; `DroneIndex` sent once). It broadcasts one static event, `OnStateChanged(Drone, bFirstState)`, on the server when a change is applied and on clients from `OnRep_State` when it arrives; the director builds the truth log and the arrivals from it, and C5's focus binding listens to it too (S3, S7). Positions need no arrival hook: the client's director compares every drone's shown position with the true one each frame (S3 design change, `05` E1). On the server, overrides `AActor::GetNetPriority` for **C6**: when `ncl.LegacyFocusPriority` is on and the viewer's view target is the drone's focus avatar, it returns the engine's own view-target priority `NetPriority × Time × 4` (`ActorReplication.cpp:56–59`); otherwise `Super`. The cvar is off by default; the boosts are counted for the CSV (S5) |
+| `ANCLPlayerController` (also) | | Replicates its player's slot to its owning client (`COND_OwnerOnly`, set in `ANCLGameMode::PostLogin`), because an Iris client's view target can stay unset (S3) |
+| `UNCLFocusSubsystem` | `UTickableWorldSubsystem` (server, C5 only: `-NCLPrioritizer=Gameplay`) | The only game code that knows the prioritiser. Finds it with `UReplicationSystem::GetPrioritizer(Name)` (an error, never a silent C4, if missing), assigns every drone from a pending list each tick until its `GetReplicatedRefHandle` is valid, and on every `OnStateChanged` sets the drone's focus to the net handle of the avatar in its target slot, or none (S7) |
 | `ANCLProp` | `AActor` | Stationary; four push-based fields that toggle on a seeded schedule |
-| `UNCLWorkloadSubsystem` | `UTickableWorldSubsystem` (works on the server; on clients it only counts arrivals when asked) | Seeded spawn from a **pure plan** (`MakePlan`: loops, prop positions, hash; tested without a world); each frame moves drones and avatars as a function of server time, applies the change schedule (calling `MARK_PROPERTY_DIRTY_FROM_NAME`) with one random stream **per event**, seeded from (seed, kind, object, event number), so no value depends on tick timing; records server truth; computes the workload hash; in C5 assigns drones to the prioritiser (retrying until each has an Iris handle) and updates focus targets when a drone retargets |
+| `UNCLWorkloadSubsystem` | `UTickableWorldSubsystem` (works on the server; on clients it only counts arrivals when asked) | Seeded spawn from a **pure plan** (`MakePlan`: loops, prop positions, hash; tested without a world); each frame moves drones and avatars as a function of server time, applies the change schedule (calling `MARK_PROPERTY_DIRTY_FROM_NAME`) with one random stream **per event**, seeded from (seed, kind, object, event number), so no value depends on tick timing; computes the workload hash; freezes its changes on request (`FreezeChanges`, after the window). It knows nothing of the replication system: the truth log is the director's, and C5's assignment and focus targets are `UNCLFocusSubsystem`'s (S7, a refinement of the original plan) |
 | `UNCLBenchSubsystem` | `UTickableWorldSubsystem` (server and client) | The director. Reads `-NCL…=` arguments; server: waits for N clients, warm-up, `BeginCapture`, exactly 1,800 captured frames (`BenchStart` in the first), `EndCapture`, changes frozen, settle, dump, exit; samples per-connection `OutTotalBytes` and busy ms at `FWorldDelegates::OnWorldTickEnd` (after the net flush, `01b` #10) and publishes CSV stats; client: event recorder, frame-rate check, dumps on `Dump`, exits |
 
 **Why a world subsystem for the workload and the director:** the project has no hand-authored map (an engine template map, as in P01), so nothing would place a manager actor; a world subsystem has exactly the world's lifetime. **Why two subsystems:** the workload is server-only and is the same in every configuration; the director also runs on clients and owns measurement. Keeping them apart means the measuring code cannot change the workload.
@@ -132,7 +134,8 @@ flowchart LR
     DV["divergence.py<br/>shared-clock join"]
   end
   subgraph Server["Server process: UnrealEditor-Cmd -server (P-cores 0xFFFF)"]
-    WL["UNCLWorkloadSubsystem<br/>seeded spawn · drive · schedule · truth log"]
+    WL["UNCLWorkloadSubsystem<br/>seeded spawn · drive · schedule"]
+    FS["UNCLFocusSubsystem (C5)<br/>assign drones · focus = attacked avatar"]
     BS["UNCLBenchSubsystem<br/>phases · CSV stats · bytes per connection"]
     GS["ANCLGameState<br/>replicated run phase"]
     PC["ANCLPlayerController<br/>view = avatar"]
@@ -150,7 +153,8 @@ flowchart LR
   RB -->|"start, pin, wait, kill"| Server
   RB -->|"start, pin, wait, kill"| Clients
   WL -->|"moves, MARK_PROPERTY_DIRTY"| D
-  WL -->|"Assign / SetFocusTarget (C5)"| P
+  D -->|"OnStateChanged"| FS
+  FS -->|"Assign / SetFocusTarget"| P
   BS --> GS
   D --> Rep
   PC -->|"GetPlayerViewPoint"| Rep
@@ -173,7 +177,7 @@ sequenceDiagram
   W->>W: NetworkIncoming (TickDispatch)
   W->>WL: Tick (after PostPhysics)
   WL->>WL: move drones + avatars to f(server time); apply schedule; MARK_PROPERTY_DIRTY
-  WL->>GP: SetFocusTarget for drones that retargeted (C5 only)
+  WL->>GP: OnStateChanged → UNCLFocusSubsystem → SetFocusTarget (C5 only)
   W->>BS: Tick: phase control, BeginCapture when the warm-up ends
   W->>ND: TickFlush [CSV: NetworkOutgoing]
   ND->>ND: ServerReplicateActors [CSV: ServerReplicateActors]
@@ -190,8 +194,8 @@ sequenceDiagram
 Super::Prioritize(Params)                                  // Epic's sphere model writes Priorities[idx]
 for k in 0 .. Params.ObjectCount-1:
     idx = Params.ObjectIndices[k]
-    focus = FocusByIndex[idx]
-    if focus is valid:
+    focus = FocusIdByIndex[idx]                            // the target's FNetHandle id, 0 = none
+    if focus != 0:
         for view in Params.View.Views:                     // one view per connection here (no split screen)
             if view.ViewTarget == focus or view.Controller == focus:
                 Params.Priorities[idx] += FocusPriorityBoost
@@ -199,7 +203,7 @@ for k in 0 .. Params.ObjectCount-1:
                 break
 ```
 
-The loop after `Super::Prioritize` is a **static, pure function** (`ApplyFocusBoost(ObjectIndices, Count, Priorities, FocusByIndex, View, Boost)`) so automation tests can check it with fake arrays, without a replication system (`03`, S6).
+The loop after `Super::Prioritize` is a **static, pure function**, `ApplyFocusBoost(ObjectIndices, Priorities, FocusIdByIndex, Views, Boost)` with the views reduced to (view target id, controller id) pairs, so `NetCostLab.Prioritizer.FocusBoost` checks it with plain arrays, without a replication system (S6).
 
 Cost: one array read per prioritised object per connection, plus a compare per view. At 256 drones × 32 connections that is about 8,000 cheap iterations per send. SC6 measures it.
 
@@ -228,7 +232,7 @@ Cost: one array read per prioritised object per connection, plus a compare per v
 | Subsystems run in editor worlds | `DoesSupportWorldType`: Game and PIE only; the workload subsystem also requires authority (`NM_DedicatedServer` or `NM_ListenServer`) | P01 `01b` #2 |
 | The prioritiser is used after Iris shut it down | `Deinit` clears every array and map and sets `SelfHandle` invalid; the game fetches the prioritiser by name each time it needs it (`GetPrioritizer`), never caches it across worlds | `NetObjectPrioritizer.h:171–172` ("Use this to remove references to other systems") |
 | Iris grows its object index space at run time | All per-index arrays are sized from `CurrentMaxInternalIndex` in `Init` and grown in `OnMaxInternalNetRefIndexIncreased` (call `Super` first) | `NetObjectPrioritizer.h:110–111, 175` |
-| An internal index is reused by another object | `RemoveObject` clears `FocusByIndex`, `HandleByIndex` and the map entry; `SetFocusTarget` looks up by `FNetRefHandle`, so a stale handle finds nothing | `ReplicationPrioritization.cpp:656–680` (removal on scope exit) |
+| An internal index is reused by another object | `RemoveObject` clears `FocusIdByIndex` and the map entry; `SetFocusTarget` looks up by `FNetRefHandle`, so a stale handle finds nothing | `ReplicationPrioritization.cpp:656–680` (removal on scope exit) |
 | `AddObject` is not synchronous in some engine version | `Assign` checks the captured index and refuses to guess (counted, logged) | `01b` #7 |
 | A drone has no Iris handle yet when spawned | Assignment is retried each frame from a pending list until `GetReplicatedRefHandle` is valid | `Actor.cpp:4768` (`StartReplicatingActor` in `DispatchBeginPlay`), `ReplicationSystemUtil.h:203` (a deferred variant exists) |
 | A focus target (avatar) is destroyed | Its `FNetHandle` just stops matching any view; the game clears focus when a player leaves | `ReplicationView.h:23–25` |
