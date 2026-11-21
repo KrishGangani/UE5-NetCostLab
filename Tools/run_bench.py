@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import glob
-import json
 import os
 import re
 import statistics
@@ -34,6 +33,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import csv_stats  # noqa: E402
+import divergence  # noqa: E402
 import netlab_env as env  # noqa: E402
 
 MAP, PACKAGED_CLIENT, COMMON, IPNETDRIVER = env.MAP, env.PACKAGED_CLIENT, env.COMMON_ARGS, env.IPNETDRIVER
@@ -52,6 +52,7 @@ CONFIGS = {
 SCENARIO_RATE = {"A": 1_000_000, "B": 24_000}   # bytes per second per client (01 section 6.3)
 SERVER_TICK_HZ = 30
 CLIENT_FPS = 30
+MAX_ANCHOR_DRIFT_MS = 5.0      # server world time vs the shared clock over the window (05 E1)
 CLIENT_FPS_TOLERANCE = 1.1     # valid: every client between 27.3 and 33 fps (the cap held, and no client starved)
 SERVER_LISTEN_TIMEOUT = 240.0
 JOIN_MARGIN_SECONDS = 180.0    # start-up and joining of N clients, on top of warm-up + capture + settle
@@ -94,15 +95,6 @@ def last_build_toolchain() -> str:
     except OSError:
         return "unknown (no UnrealBuildTool log)"
     return f"MSVC {match.group(1)}, Windows SDK {match.group(2)}" if match else "unknown"
-
-
-def read_json(path: str) -> dict | None:
-    """A report, or None if it is missing or unreadable (a process killed while writing it)."""
-    try:
-        with open(path, encoding="utf-8") as handle:
-            return json.load(handle)
-    except (OSError, ValueError):
-        return None
 
 
 def network_args(args) -> list[str]:
@@ -194,7 +186,7 @@ def collect(tag: str, run_dir: str, clients: int) -> dict:
             found["csv_error"] = str(error)
     else:
         found["csv_error"] = "missing"
-    report = read_json(os.path.join(run_dir, tag + "_server.json"))
+    report = env.read_json(os.path.join(run_dir, tag + "_server.json"))
     if report is None:
         found["server_report_error"] = "missing or unreadable"
     else:
@@ -204,7 +196,7 @@ def collect(tag: str, run_dir: str, clients: int) -> dict:
             found["bytes_per_second_per_client"] = csv_stats.summarize(rates)
         frames = max(1, report.get("window_frames", 1)) * max(1, len(report.get("connections", [])))
         found["saturated_share"] = report.get("saturated_connection_frames", 0) / frames
-    client_reports = [r for r in (read_json(p) for p in sorted(glob.glob(os.path.join(run_dir, tag + "_client*.json"))))
+    client_reports = [r for r in (env.read_json(p) for p in sorted(glob.glob(os.path.join(run_dir, tag + "_client*.json"))))
                       if r is not None and "fps" in r and "bytes_per_second" in r]
     found["client_reports"] = len(client_reports)
     if client_reports:
@@ -212,6 +204,11 @@ def collect(tag: str, run_dir: str, clients: int) -> dict:
         found["client_fps_max"] = max(c["fps"] for c in client_reports)
         found["client_bytes_per_second_median"] = statistics.median(c["bytes_per_second"] for c in client_reports)
     found["all_clients_reported"] = len(client_reports) == clients
+    # Correctness (S3): staleness, final-state mismatches, relevancy, and the clients' merged position statistics.
+    try:
+        found["correctness"] = divergence.analyse_run(run_dir, tag)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:     # e.g. a truncated row
+        found["correctness"] = {"error": f"{type(error).__name__}: {error}"}
     return found
 
 
@@ -223,7 +220,15 @@ def is_valid(record: dict, capture_frames: int) -> bool:
             and bool(record.get("all_clients_reported")) and "server_report" in record
             and record.get("csv", {}).get("frames") == capture_frames
             and CLIENT_FPS / CLIENT_FPS_TOLERANCE <= record.get("client_fps_min", 0.0)
+            and record.get("server_report", {}).get("anchor_drift_ms", 0.0) <= MAX_ANCHOR_DRIFT_MS
+            and "error" not in record.get("correctness", {})
+            and record.get("correctness", {}).get("totals", {}).get("clients_without_slot", 1) == 0
             and record.get("client_fps_max", float("inf")) <= CLIENT_FPS * CLIENT_FPS_TOLERANCE)
+
+
+def correctness_ms(record: dict, metric: str, kind: str, statistic: str) -> str:
+    value = record.get("correctness", {}).get(metric, {}).get(kind, {}).get(statistic)
+    return "?" if value is None else f"{value:.0f}ms"
 
 
 def summary_line(record: dict) -> str:
@@ -233,7 +238,10 @@ def summary_line(record: dict) -> str:
     long_frames = record.get("server_report", {}).get("long_frames", "?")
     return (f"valid={record['valid']} frames={record.get('csv', {}).get('frames')} flush median={flush:.3f} ms "
             f"B/s/client={rate:.0f} sat={record.get('saturated_share', float('nan')):.3f} long_frames={long_frames} "
-            f"client_fps_min={record.get('client_fps_min', float('nan')):.1f}")
+            f"client_fps_min={record.get('client_fps_min', float('nan')):.1f} "
+            f"stale_p50={correctness_ms(record, 'staleness_ms', 'ambient', 'median')} "
+            f"age_p50={correctness_ms(record, 'position_age_ms', 'ambient', 'p50')} "
+            f"mismatches={record.get('correctness', {}).get('totals', {}).get('mismatches', '?')}")
 
 
 def main(argv: list[str]) -> int:

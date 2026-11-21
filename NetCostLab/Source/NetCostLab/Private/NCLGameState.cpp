@@ -14,6 +14,7 @@ void ANCLGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	FDoRepLifetimeParams PushBased;
 	PushBased.bIsPushBased = true;
 	DOREPLIFETIME_WITH_PARAMS_FAST(ANCLGameState, BenchPhase, PushBased);
+	DOREPLIFETIME_WITH_PARAMS_FAST(ANCLGameState, RunInfo, PushBased);
 }
 
 void ANCLGameState::SetBenchPhase(ENCLBenchPhase NewPhase)
@@ -22,4 +23,10 @@ void ANCLGameState::SetBenchPhase(ENCLBenchPhase NewPhase)
 	MARK_PROPERTY_DIRTY_FROM_NAME(ANCLGameState, BenchPhase, this);
 	// The phase must reach clients promptly: ask for a net update now instead of waiting for the actor's update interval.
 	ForceNetUpdate();
+}
+
+void ANCLGameState::SetRunInfo(const FNCLRunInfo& NewRunInfo)
+{
+	RunInfo = NewRunInfo;
+	MARK_PROPERTY_DIRTY_FROM_NAME(ANCLGameState, RunInfo, this);
 }

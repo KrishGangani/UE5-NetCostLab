@@ -26,6 +26,10 @@ void ANCLGameMode::PostLogin(APlayerController* NewPlayer)
 		if (ANCLPlayerAvatar* Avatar = Workload->AddPlayer(NewPlayer))
 		{
 			NewPlayer->SetViewTarget(Avatar);
+			if (ANCLPlayerController* Controller = Cast<ANCLPlayerController>(NewPlayer))
+			{
+				Controller->SetPlayerSlot(Avatar->GetPlayerSlot());
+			}
 		}
 	}
 }

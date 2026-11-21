@@ -1,6 +1,6 @@
 # 04 · C++ Fundamentals: NetCostLab
 
-**Rule:** a language concept is explained here the first time this project's code uses it, with a small example first. Current to **Phase 5, step S2**. Each later step adds sections as it adds code (`03`).
+**Rule:** a language concept is explained here the first time this project's code uses it, with a small example first. Current to **Phase 5, step S3**. Each later step adds sections as it adds code (`03`).
 
 ---
 
@@ -217,3 +217,14 @@ if (!CsvFile.IsValid() || CsvFile.IsReady()) { /* safe to quit */ }
 ```
 
 Unreal's shared pointers count references: the object is deleted when the last `TSharedRef`/`TSharedPtr` to it goes away. `TSharedRef` can never be null, so it needs no check; `TSharedPtr` can. They are for plain C++ objects (like the JSON DOM), never for `UObject`s, which the garbage collector owns (`06` §8). A **future** is a handle to a result that another thread will produce: `IsReady()` asks without waiting, `Get()` would wait. The director polls `IsReady()` once per frame, so the server never blocks.
+
+## 17. Static data members
+
+```cpp
+// In the header, inside the class:
+static FOnStateChanged OnStateChanged;           // one object shared by all drones, not one per drone
+// In exactly one .cpp:
+ANCLDrone::FOnStateChanged ANCLDrone::OnStateChanged;
+```
+
+A `static` data member belongs to the class, not to an object: there is one, created at start-up. Its declaration in the header needs exactly one definition in a `.cpp`; otherwise the linker reports an unresolved symbol. Because it is shared by every world in the process, a listener checks that the drone belongs to its own world (`OnDroneStateChanged`).

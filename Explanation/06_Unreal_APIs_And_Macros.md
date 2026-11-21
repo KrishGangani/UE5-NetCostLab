@@ -1,6 +1,6 @@
 # 06 · Unreal APIs And Macros: NetCostLab
 
-**Rule:** only APIs this project actually uses, each in the same eight points: 1 what it is · 2 why it exists · 3 how it works · 4 when to use it · 5 when not to · 6 common mistakes · 7 a small example · 8 how this project uses it. Every engine claim is checked in the UE 5.8.4 source. Current to **Phase 5, step S2**; later steps add their APIs.
+**Rule:** only APIs this project actually uses, each in the same eight points: 1 what it is · 2 why it exists · 3 how it works · 4 when to use it · 5 when not to · 6 common mistakes · 7 a small example · 8 how this project uses it. Every engine claim is checked in the UE 5.8.4 source. Current to **Phase 5, step S3**; later steps add their APIs.
 
 | # | API | First used in |
 |---|---|---|
@@ -310,3 +310,58 @@
 6. **Mistakes:** exiting before asynchronous writes (the CSV) finish.
 7. **Example:** `FPlatformMisc::RequestExit(false, TEXT("UNCLBenchSubsystem"));`
 8. **Here:** the server after Dump, once every client has left (or after a 30 s timeout) and the CSV future is ready; each client after writing its report.
+
+## 25. RepNotify: `ReplicatedUsing`, `OnRep_…`; and a static multicast delegate
+
+1. **What:** `UPROPERTY(ReplicatedUsing = OnRep_State)` makes the client call `OnRep_State()` (a `UFUNCTION`) after a new value of the property arrived. `DECLARE_MULTICAST_DELEGATE_TwoParams(FOnStateChanged, const ANCLDrone&, bool)` declares a list of C++ callbacks, here as a static member, so any listener can subscribe without knowing any drone.
+2. **Why:** the client must know the moment a state change arrives, and the drone should not contain measuring code.
+3. **How:** the notify fires on clients only (the server broadcasts the same event itself when it applies a change), when the received value differs from the client's current one (`REPNOTIFY_OnChanged`, the default of `FDoRepLifetimeParams`, `Net/UnrealNetwork.h:143`), in every replication system. That includes a drone's first replication, whose state differs from the class default. `OnStateChanged.Broadcast(*this, !HasActorBegunPlay())` calls every bound function (a new actor's first notify comes before it begins play); `AddUObject` binds a member function, and the returned handle removes it in `Deinitialize`.
+4. **When:** reacting to replicated changes on clients.
+5. **When not:** on the server (it never fires there); for per-frame data (use the value directly).
+6. **Mistakes:** counting a newly relevant actor's first notify as a delivered change (`07` S3-2); forgetting `UFUNCTION()` on the notify (UnrealHeaderTool rejects it); a static delegate left bound to a destroyed listener (always remove the handle).
+7. **Example:** `StateChangedHandle = ANCLDrone::OnStateChanged.AddUObject(this, &UNCLBenchSubsystem::OnDroneStateChanged);`
+8. **Here:** `ANCLDrone::ApplyStateChange` (server) and `OnRep_State` (client); the director's truth log and arrivals.
+
+## 26. The shared clock: `FPlatformTime::Seconds`, `FApp::GetCurrentTime`
+
+1. **What:** `FPlatformTime::Seconds()` is the high-resolution clock (QueryPerformanceCounter × seconds per count, plus a constant offset, `Windows/WindowsPlatformTime.h:23–30, 46–49`). `FApp::GetCurrentTime()` is that clock's value at the start of the current frame, set after the frame-rate wait.
+2. **Why:** every process on one machine reads the same counter, so server and client times can be subtracted directly: staleness, and the client's mapping to the server's world time.
+3. **How:** the server stamps a change with `FApp::GetCurrentTime()` (its frame start, the instant the world time of that frame belongs to). The client stamps an arrival with `FPlatformTime::Seconds()`. The world time advances by the same frame deltas, so one anchor (clock, world time) maps any instant to the server's world time.
+4. **When:** timing across processes on one machine.
+5. **When not:** across machines (their counters are unrelated; you would need clock synchronisation).
+6. **Mistakes:** mixing `FPlatformTime::Seconds()` with `UWorld::GetTimeSeconds()` (world time, a different origin), or with `FDateTime` (wall clock); storing the value in a `float` (the offset alone is 16,777,216 s: a float has no fractional digits left).
+7. **Example:** `const double ServerTime = Anchor.WorldSecondsAtAnchor + (FPlatformTime::Seconds() - Anchor.ClockAtAnchor);`
+8. **Here:** the truth log, the arrival log, and the clients' position error and age.
+
+## 27. `FMath::Atan2`, and wrapping an angle
+
+1. **What:** the angle of a point around a centre, and an angle brought back into [−π, π].
+2. **Why:** the age of a shown position is the angle the true position has moved past it, divided by the angular speed.
+3. **How:** `Atan2(Y, X)` returns [−π, π]; the difference of two angles can be anywhere, so it must be wrapped back into [−π, π]. `UnwindRadians` subtracts 2π in a loop (once per turn); since the true angle grows with the run, `LoopAgeSeconds` wraps in one step instead: `x − 2π·round(x / 2π)`.
+4. **When:** circular motion, headings.
+5. **When not:** for ages longer than half a loop period, which alias (here: more than 2.6 s).
+6. **Mistakes:** forgetting the direction of travel (a clockwise loop has a negative angular speed: multiply by its sign).
+7. **Example:** see `UNCLWorkloadSubsystem::LoopAgeSeconds`.
+8. **Here:** the position-age measurement.
+
+## 28. Iris prioritisers: `USphereNetObjectPrioritizer`, `SetPrioritizer`, `GetPrioritizer(Handle)`, `FReplicationView`
+
+1. **What:** a prioritiser computes, per send and per connection, a priority for each object it owns; ≥ 1.0 means "considered for this send", and priorities accumulate until the object is sent (`NetObjectPrioritizer.h`).
+2. **Why:** Iris has no per-actor priority hook; gameplay priority must be a prioritiser.
+3. **How:** subclass `USphereNetObjectPrioritizer` (subclassing from another module works: the engine's `ReplicationSystemTestPlugin` does it), override `Prioritize` and call `Super`. `Params.Priorities` is indexed by internal object index; `Params.View.Views` holds each view's `Controller` and `ViewTarget` as `FNetHandle`. Register it in `[/Script/IrisCore.NetObjectPrioritizerDefinitions]`; game code gets the handle with `GetPrioritizerHandle(Name)` and the object with `GetPrioritizer(Name)` (`ReplicationSystem.h:357, 366`), then calls `SetPrioritizer(Object, Handle)` per object.
+4. **When:** connection-specific priority that depends on gameplay.
+5. **When not:** a connection-independent priority (use `SetStaticPriority`).
+6. **Mistakes:** a multiplier instead of an additive boost (a far object at 0.1 stays below 1.0); assuming `Priorities` is indexed by batch position (it is by internal index); reading private Iris headers to map indices to objects.
+7. **Example:** `Prioritizer->Assign(*System, Handle, Bridge->GetReplicatedRefHandle(Drone));`
+8. **Here:** `UNCLGameplayPrioritizer` and `UNCLFocusSubsystem`.
+
+## 29. `AActor::GetNetPriority` and `TAutoConsoleVariable`
+
+1. **What:** the legacy per-actor, per-connection priority hook; a console variable defined in C++.
+2. **Why:** C6 puts the same focus rule into legacy replication, as the existing-solution comparison.
+3. **How:** the engine multiplies `Time` by 4 for the viewer's own view target and by 0.2–2 by direction and distance (`ActorReplication.cpp:47–92`); our override returns `NetPriority × Time × 4` for a drone attacking the viewer, else `Super`. `TAutoConsoleVariable<bool>` registers `ncl.LegacyFocusPriority`; `-dpcvars=` sets it at start-up.
+4. **When:** legacy and push-model replication.
+5. **When not:** Iris and the Replication Graph never call it.
+6. **Mistakes:** expecting it to change Iris runs.
+7. **Example:** `if (CVar.GetValueOnGameThread() && Avatar && Avatar->GetPlayerSlot() == State.TargetSlot) return NetPriority * Time * 4.0f;`
+8. **Here:** `ANCLDrone::GetNetPriority`.

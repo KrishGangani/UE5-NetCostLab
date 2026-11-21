@@ -1,6 +1,6 @@
 # 07 · Common Mistakes: NetCostLab
 
-**Rule:** for every module, how to **identify**, **prevent** and **debug** the mistakes it invites. Current to **Phase 5, step S2**; later steps add their mistakes.
+**Rule:** for every module, how to **identify**, **prevent** and **debug** the mistakes it invites. Current to **Phase 5, step S3**; later steps add their mistakes.
 
 ---
 
@@ -61,3 +61,28 @@
 | S2-6 | **Hand-built JSON** | A report that Python cannot parse when a path contains a backslash | Write reports with `FJsonObject` and `FJsonSerializer` (`06` §22) | `json.load` in `run_bench.py` raises; the run is invalid |
 | S2-7 | **Two `-ini:Engine:` switches assumed to override each other** | Only one of the settings takes effect | The parser walks every `-ini:` token (`ConfigCacheIni.cpp:2341–2345`), so separate switches are fine; each switch's settings are separated by commas | The server log's config dump (`-ExecCmds` with the key) |
 | S2-8 | **Capping a client's frame rate with `-dpcvars=t.MaxFPS`** | The log says `Set CVar [[t.MaxFPS:30]]`, yet the client runs at 2,000+ fps (our first S2 run) and sends far more packets than a real client | Know that `UGameEngine::Init` re-applies the user settings and writes `FrameRateLimit` (0) into `t.MaxFPS` on every non-dedicated process (`GameEngine.cpp:1249–1250`, `GameUserSettings.cpp:535–538`). Set the cap after start-up (`GEngine->SetMaxFPS` when the world begins play), and make a run invalid when a client's measured fps exceeds the cap | The client report's `fps`; `run_bench.py` records `client_fps_max` |
+
+---
+
+## Correctness measurement mistakes (step S3)
+
+| # | Mistake | How you notice it | How to prevent it | How to debug it |
+|---|---|---|---|---|
+| S3-1 | **Logging every movement arrival for an offline join** | 460,000 records per client per run (256 drones × 30 Hz × 60 s), for 32 clients and 100+ runs | Compute the error live: the client rebuilds the seeded plan and maps the shared clock to the server's world time (`05` E1) | Compare a few live values with `LoopPosition` by hand in a test (`LoopAgeMatchesDelay`) |
+| S3-2 | **Counting a newly relevant drone's first state as a delivered change** | Staleness has a long tail of seconds: the change happened while the drone was not relevant to this client | Mark a newly replicated actor's first notify, which comes before it begins play (`bFirstState = !HasActorBegunPlay()`), and leave it out | `first` column in the arrivals file; `first_states` in the run's correctness block |
+| S3-3 | **Two clocks** | Staleness of seconds or negative values | One clock for every timestamp: `FPlatformTime::Seconds()` (and `FApp::GetCurrentTime()`, the same clock at frame start), never world time or wall time | The divergence self-test; the S3 `PktLag` check (a known delay must reappear) |
+| S3-4 | **A CRC over a struct's bytes** | Equal states hash differently now and then (padding bytes are undefined) | CRC field by field (`GetStateCrc`) | Compare the fields of one mismatching actor in the two dumps |
+| S3-5 | **Using a nested type in a member declaration before the type is declared** | Compile error: `FSettings` is not declared yet, although it is in the class | Inside a class body only function bodies see the whole class; declarations see what is above them. Put the accessor below the struct | The compiler message names the line |
+| S3-6 | **Reading position age beyond half a loop period** | A very stale drone reports a small or negative age | Use the position error (cm) as the headline metric; the age is exact only up to half a loop period (≥ 2.6 s here) | The error and the age disagree: large error, small age |
+| S3-7 | **Identifying a client's own player by its view target** | Every Iris client reports slot −1: no threat samples at all in C4, while C1 has them. The view-target RPC can arrive before the avatar exists on the client, so the view target stays unset | Replicate what the client must know about itself on its own controller (`PlayerSlot`, `COND_OwnerOnly`) | The `slot` field of every client report; `clients_without_slot` in the run's correctness block |
+| S3-8 | **Reporting 0 when a check could not run** | "0 relevancy misses" for clients whose avatar was unknown: the check never ran, and 0 looked like a pass | Report "unknown" (an error entry, `null`), count it, and make the run invalid | `divergence.py`'s `clients_without_slot`; `run_bench.py`'s validity rule |
+
+---
+
+## Prioritiser and integration mistakes (steps S4–S7)
+
+| # | Mistake | How you notice it | How to prevent it | How to debug it |
+|---|---|---|---|---|
+| S4-1 | **Running more players than the game session allows** | Clients 17–32 fail with "Server full" (PreLogin failure) and the server waits for players that never come | `[/Script/Engine.GameSession] MaxPlayers=64` (the engine default is 16, `BaseGame.ini:67–68`) | Count `Join succeeded` in the server log against N |
+| S6-1 | **Mapping Iris indices to objects through private headers** | Code that does not link against an installed engine, or breaks on the next version | Capture the index in `AddObject` during `SetPrioritizer` (`05` F2) | `c5_assign_failures` in the server report |
+| S7-1 | **Assigning a drone before it replicates** | `GetReplicatedRefHandle` is invalid at spawn; every assignment fails | Retry from a pending list each tick | `c5_pending` in the server report |

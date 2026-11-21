@@ -1,0 +1,99 @@
+{
+  "batch": "2026-11-21_110316_final",
+  "purpose": "step checks 'final'",
+  "engine": "UE 5.8.4 (CL 58902052), launcher build",
+  "steps": {
+    "build_editor": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLabEditor",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 23.5,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "build_game": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\build.bat",
+        "NetCostLab",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 16.6,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "tests": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\run_tests.bat",
+        "NetCostLab",
+        "..\\Benchmarks\\Raw\\2026-11-21_110316_final\\tests_editor.log"
+      ],
+      "exit_code": 0,
+      "seconds": 19.5,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": [],
+      "results": {
+        "NetCostLab.Bench.HistogramPercentiles": "Success",
+        "NetCostLab.Prioritizer.FocusBoost": "Success",
+        "NetCostLab.Workload.ChangeStreamsArePure": "Success",
+        "NetCostLab.Workload.LoopAgeMatchesDelay": "Success",
+        "NetCostLab.Workload.LoopMotionMatchesSpeed": "Success",
+        "NetCostLab.Workload.PlanIsDeterministic": "Success",
+        "NetCostLab.Workload.PlanStaysInArena": "Success",
+        "NetCostLab.Workload.ScheduleKeepsPhase": "Success"
+      }
+    },
+    "package": {
+      "command": [
+        "cmd",
+        "/c",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\package.bat",
+        "Development"
+      ],
+      "exit_code": 0,
+      "seconds": 62.1,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    },
+    "bench1": {
+      "command": [
+        "%USERPROFILE%\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "-I",
+        "-u",
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Tools\\run_bench.py",
+        "--configs",
+        "C1,C5",
+        "--clients",
+        "8",
+        "--runs",
+        "2",
+        "--warmup",
+        "10",
+        "--capture-frames",
+        "900",
+        "--settle",
+        "3",
+        "--label",
+        "finalb"
+      ],
+      "exit_code": 0,
+      "seconds": 279.4,
+      "warning_lines": 0,
+      "error_lines": 0,
+      "samples": []
+    }
+  }
+}

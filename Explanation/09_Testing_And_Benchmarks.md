@@ -170,3 +170,76 @@ Each bench step ran one C1 and one C4 run at N = 8, Scenario A (1 MB/s per clien
   - logging the window-closed line one frame later: one line in 1,800 frames.
 
 **What S2 taught us:** a setting that is logged as applied is not necessarily in force. The clients' cap was overwritten during engine start-up, and only the measured frame rate in the client reports showed it. Every run now checks the clients' frame rate itself.
+
+
+---
+
+## Phase 5 · Step S3: correctness measurement (2026-11-21)
+
+**How it ran:** `Tools\check_job.py --label s3 --build --tests NetCostLab --package`, then two bench steps: C1 and C4 at N = 8 (Scenario A, 0% loss), and C4 at N = 8 with `--extra=-PktLag=100` (100 ms added to every packet the **server** sends; `NetEmulationHelper.cpp:567`). No priming run: these runs check the tool, they are not measurements. Masks were read back for every process (server `0xFFFF`, clients `0xFF0000`).
+
+| # | Check | Result |
+|---|---|---|
+| S3-a | **First job** `20261121_071713_bba628` (batches `2026-11-21_083631_s3`, `…_083817_s3a`, `…_084138_s3lag`), 406.9 s, exit 0 | Both targets ✅ (15.1 s, 16.5 s), **0 errors, 0 warnings**. **7 of 7 tests passed** (new: `NetCostLab.Workload.LoopAgeMatchesDelay`, `NetCostLab.Bench.HistogramPercentiles`). Package ✅ 58.7 s. All three runs valid by the S2 rules; anchor drift 0.000 ms in every run |
+| S3-b | **Live position age vs state staleness**, 0% loss | They agree, which is the point of measuring both: C1 median age **37 ms**, state staleness **36.9 ms** (ambient); C4 **53 ms** and **53.2 ms**. Both are within two server ticks (≤ 67 ms), as the S3 criterion asks. Position error medians 18 cm (C1) and 25 cm (C4), at drone speeds of 4–6 m/s. These are N = 8 tool checks, not results |
+| S3-c | **Known delay reappears** (`-PktLag=100` on the server, C4) | Median state staleness **170 ms** (+117 ms over S3-b) and median age **170 ms** (+117 ms). ❌ against the criterion as written (+100 ± 10 ms). The tool is right and the expectation was not: the engine releases a lagged packet only in the connection's tick, once per server frame (`UNetConnection::UpdateDelayedPackets`, called from the tick, `NetConnection.cpp:4796, 5156–5175`). The packet therefore waits 100 ms **plus** the time to the next 33 ms tick, about 17 ms on average: an expected rise of ≈ 117 ms, exactly what was measured. The 03 criterion is corrected (100 ms + half a tick, ± 10 ms) |
+| S3-d | **Final state after the settle** | ✅ **0 mismatches** in all three runs: every drone and prop a client held had the server's CRC |
+| S3-e | **Bookkeeping** | 7,679–7,710 state changes per 60 s window, the schedule's 256 drones every 2 s plus the frame quantisation. "Not received" (2,060–3,143 over 8 clients) and "first states" (1,961–2,187) are the relevancy turnover of drones moving in and out of 150 m, not losses: no relevant held actor mismatched |
+| S3-f | ❌ **Finding: Iris clients did not know their own slot.** Every C4 client reported `slot = -1`, so C4 had no threat samples and its relevancy check could not run (and printed 0) | The client took its slot from its view target, which the server sets with an RPC that names the avatar. Under Iris that RPC can arrive before the avatar exists on the client, and the view target stays unset. Fixed: the slot is replicated on the client's own controller (`COND_OwnerOnly`, `05` C5); `divergence.py` reports a missing slot as an error, and `run_bench.py` makes such a run invalid (`07` S3-7, S3-8). Re-checked in the final job (S3-g) |
+| S3-g | **The re-check (and the final job)** | The slot fix was checked in the final job below: every client of every run reported its slot (`clients_without_slot = 0`), **0 relevancy misses** and **0 final mismatches** in C1 and C5 |
+
+**What S3 taught us:** a check that cannot run must not print a passing number. The relevancy check said "0" for every Iris client, because none of them knew its slot.
+
+---
+
+## Phase 5 · Finish: C6, the prioritiser, C5 and the final job (2026-11-21)
+
+**Owner direction:** finish the core in its smallest working form, at most 8 clients per run, no benchmark campaign, one queue job with one short batch. Planned steps not done: S4 calibration (its N = 32 run failed on `MaxPlayers` = 16, fixed in `DefaultGame.ini`, then the job was cancelled; its partial output is discarded and not committed), the S5 baselines, Scenario B, and S8.
+
+**The final job** `20261121_110316_2b0b7c` (batches `2026-11-21_110316_final`, `…_110518_finalb`), 401.2 s, exit 0:
+
+```
+python -I -u Tools\check_job.py --label final --build --tests NetCostLab --package
+    --bench "--configs C1,C5 --clients 8 --runs 2 --warmup 10 --capture-frames 900 --settle 3 --label finalb"
+```
+
+| # | Check | Result |
+|---|---|---|
+| F-a | Build | ✅ Editor target 23.5 s, game target 16.6 s, **0 errors, 0 warnings**: the plugin prioritiser, the C5 binding, C6 and the S3 fixes |
+| F-b | Automation tests | ✅ **8 of 8 passed**: `NetCostLab.Prioritizer.FocusBoost`, `Bench.HistogramPercentiles`, `Workload.ChangeStreamsArePure`, `LoopAgeMatchesDelay`, `LoopMotionMatchesSpeed`, `PlanIsDeterministic`, `PlanStaysInArena`, `ScheduleKeepsPhase` |
+| F-c | Package | ✅ 62.1 s, 0 errors, 0 warnings |
+| F-d | **The prioritiser is in the game** | ✅ Both C5 runs: **256 of 256 drones assigned, 0 pending, 0 assign failures** (`c5_*` in `_server.json`) |
+| F-e | Batch: 1 discarded priming run, then C1, C5, C5, C1 (rotated), N = 8, Scenario A (1 MB/s), 900 captured frames (30 s) per run | ✅ 4 of 4 measured runs valid: every process exited 0 by itself, clients at 30.0 fps, 0 saturated frames, anchor drift 0 ms, every client knew its slot. The priming run was invalid (one client at 22.5 fps during its 10 s warm-up), which is why it is discarded |
+
+**Results of the batch** (median of each run; the two runs per configuration shown as [run 1, run 2]). N = 8, uncapped: **these are not the planned headline conditions** (`01` §6.3).
+
+| Metric | C1 (legacy) | C5 (Iris + gameplay prioritiser) |
+|---|---|---|
+| Server net-tick time, median (ms) | 3.90, 3.99 | **0.90, 0.85** |
+| Server net-tick time, p95 (ms) | 4.97, 5.72 | 1.48, 1.20 |
+| Bytes per second per client, median | 67,073; 67,101 | 43,060; 43,044 |
+| State staleness, **threat** drones (ms, median / p95) | 38.5 / 67.0; 37.9 / 67.6 | **13.0 / 34.5; 19.1 / 33.5** |
+| State staleness, **ambient** drones (ms, median / p95) | 36.8 / 67.1; 37.6 / 67.6 | 48.3 / 305.0; 54.0 / 305.4 |
+| Position error, threat (cm, p50 / p95) | 18 / 34; 18 / 35 | **7 / 31; 10 / 33** |
+| Position error, ambient (cm, p50 / p95) | 18 / 34; 18 / 35 | 24 / 136; 26 / 137 |
+| Final-state mismatches; relevancy misses | 0; 0 | 0; 0 |
+
+What this shows, and what it does not:
+- **The boost works as designed.** Inside C5, the drones attacking a client's player reach that client's screen about three times sooner than the other drones (median staleness 13–19 ms vs 48–54 ms). The engine's sphere model alone spreads ambient drones over time by distance: their p95 is about 305 ms, and C4 showed the same pattern in S3 (p95 277 ms).
+- **It is not yet the planned comparison.** C5's own baseline is C4, and C4's threat drones were not measured: C4 ran only in S3, before the slot fix (S3-f). The planned C5-vs-C4 test is under a bandwidth cap, where priority decides what is sent at all (SC4–SC5), and it was not run.
+- C1 vs C5 differ in two things at once (Iris, and the prioritiser), so the server-time and bytes gaps are mostly Iris, not our term. S3 measured C4 at 0.86 ms and 43.6 kB/s per client under the same conditions (60 s windows, S2/S3).
+
+## Success criteria (01 §6.5), from the data that exists
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| SC1 | Same workload everywhere; no disconnects | ✅ **met for every run made** | Hash `0x680F4C7A` in every run (S1–S3, final); every client stayed connected and exited 0 in every valid run |
+| SC2 | Scenario A really uncapped (≤ 1% saturated frames) | ✅ **met at N = 8**, not measured at 16 and 32 | 0 saturated connection-frames in every Scenario A run (S2, S3, final) |
+| SC3 | 18 cells × ≥ 6 runs | ❌ **not measured** | Only N = 8; C1, C4 and C5 have 1–2 runs each; C2, C3 and C6 have none |
+| SC4 | Threat p95 error C5 ≤ 0.5 × C4 (Scenario B) | **not measured** | Scenario B not run; C4 threat class not measured (S3-f). At N = 8 uncapped, C5 threat p95 error 31–33 cm vs ambient 136–137 cm |
+| SC5 | Ambient p95 error C5 ≤ 1.5 × C4 (Scenario B) | **not measured** | Scenario B not run. At N = 8 uncapped, C5 ambient p95 136–137 cm; C4 (S3) 134 cm |
+| SC6 | C5 net tick ≤ C4 + 5% at N = 32 | **not measured** at N = 32 | At N = 8: C5 0.85–0.90 ms (30 s windows) vs C4 0.86–0.88 ms (S2c/S3, 60 s windows): not a controlled comparison |
+| SC7 | 0 final mismatches under 1/3/5% loss | **not measured** under loss | 0 mismatches in every run at 0% loss, and with 100 ms lag (S3-d) |
+| SC8 | C6 vs C2 reported next to C5 vs C4 | **not measured** | C6 is implemented (`05` F1) and builds; never run |
+
+H1–H4 (`01` §4) are not answered: the S5 baselines were not captured.

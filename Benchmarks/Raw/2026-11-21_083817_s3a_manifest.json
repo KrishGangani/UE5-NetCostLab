@@ -1,0 +1,884 @@
+{
+  "batch": "2026-11-21_083817_s3a",
+  "scenario": "A",
+  "rate": 1000000,
+  "loss": 0,
+  "configs": [
+    "C1",
+    "C4"
+  ],
+  "clients": [
+    8
+  ],
+  "runs": 1,
+  "timing": {
+    "warmup_s": 20.0,
+    "capture_frames": 1800,
+    "settle_s": 5.0
+  },
+  "environment": {
+    "date": "2026-11-21T08:38:17",
+    "engine": "UE 5.8.4 (CL 58902052), launcher build",
+    "server_binary": "UnrealEditor-Cmd.exe -server (Development editor build), uncooked",
+    "client_binary": "packaged Development game, -nullrhi",
+    "toolchain_of_last_build": "MSVC 14.44.35229, Windows SDK 10.0.22621.0",
+    "cpu": "Intel(R) Core(TM) i7-14650HX",
+    "ram_gb": "31.6",
+    "os": "Microsoft Windows 11 Home Single Language build 26200",
+    "power_plan": "Power Scheme GUID: 6fecc5ae-f350-48a5-b669-b472cb895ccf  (Turbo)",
+    "on_ac_power": "True",
+    "affinity": {
+      "server_mask": "0xFFFF",
+      "client_mask": "0xFF0000"
+    },
+    "logical_cpus": 24,
+    "map": "/Engine/Maps/Templates/Template_Default",
+    "client_fps_cap": 30
+  },
+  "records": [
+    {
+      "tag": "2026-11-21_083817_s3a_C1_A_N8_r1",
+      "config": "C1",
+      "clients": 8,
+      "loss": 0,
+      "rate": 1000000,
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\\2026-11-21_083817_s3a_C1_A_N8_r1_server.log",
+        "-UseIrisReplication=0",
+        "-dpcvars=Net.IsPushModelEnabled=0",
+        "-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxClientRate=1000000,[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxInternetClientRate=1000000,[/Script/Engine.Player]:ConfiguredInternetSpeed=1000000",
+        "-NCLClients=8",
+        "-NCLWarmup=20.0",
+        "-NCLCaptureFrames=1800",
+        "-NCLSettle=5.0",
+        "-NCLSeed=1",
+        "-NCLRunTag=2026-11-21_083817_s3a_C1_A_N8_r1",
+        "-NCLConfig=C1",
+        "-NCLOutDir=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a",
+        "-NCLExit",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding"
+      ],
+      "client_command_0": [
+        "127.0.0.1",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\\2026-11-21_083817_s3a_C1_A_N8_r1_client00.log",
+        "-UseIrisReplication=0",
+        "-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxClientRate=1000000,[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxInternetClientRate=1000000,[/Script/Engine.Player]:ConfiguredInternetSpeed=1000000",
+        "-NCLRunTag=2026-11-21_083817_s3a_C1_A_N8_r1",
+        "-NCLOutDir=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a",
+        "-NCLClientIndex=0",
+        "-NCLClientFPS=30",
+        "-NCLExit",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding"
+      ],
+      "server_exit": 0,
+      "client_exits": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "wall_seconds": 100.6,
+      "csv": {
+        "file": "2026-11-21_083817_s3a_C1_A_N8_r1_server.csv",
+        "frames": 1800,
+        "finalised": true,
+        "metadata": {
+          "hasheaderrowatend": "1",
+          "eventtimestamps": "1",
+          "platform": "Windows",
+          "config": "Development",
+          "buildversion": "++UE5+Release-5.8-CL-58902052",
+          "engineversion": "5.8.4-58902052+++UE5+Release-5.8",
+          "enginereleaseversion": "5.8.4",
+          "os": "Windows 11 (25H2) [10.0.26200.9974]",
+          "cpu": "GenuineIntel|Intel(R) Core(TM) i7-14650HX",
+          "pgoenabled": "0",
+          "pgoprofilingenabled": "0",
+          "ltoenabled": "0",
+          "asan": "0",
+          "mergedmodules": "0",
+          "compacttset": "0",
+          "loginid": "cb4377c742481910ba0f5999e88874c8",
+          "llm": "0",
+          "zenstreaming": "0",
+          "systemresolution.resx": "1280",
+          "systemresolution.resy": "720",
+          "extradevelopmentmemorymb": "0",
+          "verbatimrhiname": "Null",
+          "rhiname": "Null",
+          "rhifeaturelevel": "SM6",
+          "shaderplatform": "PCD3D_SM6",
+          "gpu": "",
+          "gpudriver": "",
+          "deviceprofile": "WindowsEditor",
+          "largeworldcoordinates": "1",
+          "raytracing": "0",
+          "iris": "0",
+          "nclruntag": "2026-11-21_083817_s3a_C1_A_N8_r1",
+          "nclconfig": "C1",
+          "nclclients": "8",
+          "nclworkloadhash": "0x680F4C7A",
+          "csvid": "0184CD11485F66F886BA93A96B8034F3",
+          "targetframerate": "165",
+          "starttimestamp": "1795230534",
+          "namedevents": "0",
+          "hasgtstalls": "0",
+          "vsyncenabled": "0",
+          "csvbench_timingstat_ns": "35.147500",
+          "csvbench_customstat_ns": "21.052500",
+          "csvbench_duration_ms": "2.248200",
+          "endtimestamp": "1795230594",
+          "captureduration": "60.231459",
+          "csvmaxfilebytesreached": "0",
+          "commandline": "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject\" /Engine/Maps/Templates/Template_Default -server -abslog=\"D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\\2026-11-21_083817_s3a_C1_A_N8_r1_server.log\" -UseIrisReplication=0 -dpcvars=Net.IsPushModelEnabled=0 -ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxClientRate=1000000",
+          "/script/onlinesubsystemutils.ipnetdriver]:maxinternetclientrate=1000000": "[/Script/Engine.Player]:ConfiguredInternetSpeed=1000000 -NCLClients=8 -NCLWarmup=20.0 -NCLCaptureFrames=1800 -NCLSettle=5.0 -NCLSeed=1 -NCLRunTag=2026-11-21_083817_s3a_C1_A_N8_r1 -NCLConfig=C1 -NCLOutDir=\"D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\" -NCLExit -log -unattended -nosplash -nosound -traceautostart=0 -NoLiveCoding\""
+        },
+        "events": {
+          "NetCostLab/BenchStart": 1,
+          "GC": 1,
+          "NetCostLab/BenchEnd": 1
+        },
+        "columns": {
+          "FrameTime": {
+            "n": 1800,
+            "mean": 33.46200072222222,
+            "min": 32.4066,
+            "median": 33.46695,
+            "p95": 34.178430000000006,
+            "p99": 34.483058,
+            "max": 35.1395
+          },
+          "Exclusive/GameThread/ServerReplicateActors": {
+            "n": 1800,
+            "mean": 3.944890388888889,
+            "min": 2.4504,
+            "median": 3.91315,
+            "p95": 4.691445,
+            "p99": 5.263717,
+            "max": 6.9447
+          },
+          "Exclusive/GameThread/NetworkOutgoing": {
+            "n": 1800,
+            "mean": 0.04086005555555556,
+            "min": 0.0315,
+            "median": 0.039,
+            "p95": 0.0516,
+            "p99": 0.068901,
+            "max": 0.2464
+          },
+          "Exclusive/GameThread/NetworkIncoming": {
+            "n": 1800,
+            "mean": 0.1405511111111111,
+            "min": 0.0777,
+            "median": 0.13205,
+            "p95": 0.19312499999999996,
+            "p99": 0.274404,
+            "max": 0.4161
+          },
+          "NetCostLab/BusyMsPrevFrame": {
+            "n": 1800,
+            "mean": 5.1802637222222225,
+            "min": 3.5177,
+            "median": 5.1203,
+            "p95": 6.036004999999999,
+            "p99": 6.751219,
+            "max": 26.1728
+          },
+          "NetCostLab/OutBytes": {
+            "n": 1800,
+            "mean": 17759.82611111111,
+            "min": 12942.0,
+            "median": 17766.5,
+            "p95": 19715.25,
+            "p99": 20720.73,
+            "max": 22095.0
+          },
+          "NetCostLab/SatConnections": {
+            "n": 1800,
+            "mean": 0.0,
+            "min": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "NetCostLab/Clients": {
+            "n": 1800,
+            "mean": 8.0,
+            "min": 8.0,
+            "median": 8.0,
+            "p95": 8.0,
+            "p99": 8.0,
+            "max": 8.0
+          },
+          "NetFlushMs": {
+            "n": 1800,
+            "mean": 3.9857504444444447,
+            "min": 2.4901,
+            "median": 3.9547499999999998,
+            "p95": 4.736174999999999,
+            "p99": 5.299233,
+            "max": 7.0218
+          }
+        }
+      },
+      "server_report": {
+        "run_tag": "2026-11-21_083817_s3a_C1_A_N8_r1",
+        "config": "C1",
+        "workload_hash": "0x680F4C7A",
+        "window_seconds": 60.23180520161986,
+        "window_frames": 1800,
+        "long_frames": 0,
+        "saturated_connection_frames": 0,
+        "state_changes": 7710,
+        "anchor_drift_ms": 0,
+        "connections": [
+          {
+            "slot": 3,
+            "out_bytes": 4072629,
+            "bytes_per_second": 67615.92129552297,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 7,
+            "out_bytes": 4037743,
+            "bytes_per_second": 67036.72563829133,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 5,
+            "out_bytes": 3633203,
+            "bytes_per_second": 60320.34052172637,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 4,
+            "out_bytes": 4103508,
+            "bytes_per_second": 68128.59063851603,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 0,
+            "out_bytes": 4124726,
+            "bytes_per_second": 68480.86299576939,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 2,
+            "out_bytes": 4120442,
+            "bytes_per_second": 68409.73778234336,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 6,
+            "out_bytes": 3794623,
+            "bytes_per_second": 63000.31996879197,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 1,
+            "out_bytes": 4080813,
+            "bytes_per_second": 67751.79635310435,
+            "saturated_frames": 0
+          }
+        ]
+      },
+      "bytes_per_second_per_client": {
+        "n": 8,
+        "mean": 66343.03689925822,
+        "min": 60320.34052172637,
+        "median": 67683.85882431366,
+        "p95": 68455.96917107028,
+        "p99": 68475.88423082957,
+        "max": 68480.86299576939
+      },
+      "saturated_share": 0.0,
+      "client_reports": 8,
+      "client_fps_min": 29.98815318616692,
+      "client_fps_max": 29.993870958953885,
+      "client_bytes_per_second_median": 67705.15258924448,
+      "all_clients_reported": true,
+      "correctness": {
+        "changes": 7710,
+        "clients": [
+          {
+            "client": "00",
+            "slot": 6,
+            "first_states": 353,
+            "received": 7092,
+            "not_received": 618,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "01",
+            "slot": 4,
+            "first_states": 235,
+            "received": 7640,
+            "not_received": 70,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "02",
+            "slot": 2,
+            "first_states": 224,
+            "received": 7672,
+            "not_received": 38,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "03",
+            "slot": 7,
+            "first_states": 292,
+            "received": 7516,
+            "not_received": 194,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "04",
+            "slot": 0,
+            "first_states": 231,
+            "received": 7686,
+            "not_received": 24,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "05",
+            "slot": 1,
+            "first_states": 248,
+            "received": 7617,
+            "not_received": 93,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "06",
+            "slot": 5,
+            "first_states": 350,
+            "received": 6804,
+            "not_received": 906,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "07",
+            "slot": 3,
+            "first_states": 117,
+            "received": 7593,
+            "not_received": 117,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          }
+        ],
+        "totals": {
+          "mismatches": 0,
+          "relevancy_misses": 0,
+          "not_received": 2060,
+          "first_states": 2050
+        },
+        "staleness_ms": {
+          "threat": {
+            "n": 1818,
+            "mean": 36.77395377738444,
+            "min": 1.7810016870498657,
+            "median": 35.65149940550327,
+            "p95": 66.69699903577566,
+            "p99": 70.54527934640645,
+            "max": 90.08000046014786
+          },
+          "ambient": {
+            "n": 57802,
+            "mean": 37.44379623828287,
+            "min": 1.3050027191638947,
+            "median": 36.91750019788742,
+            "p95": 66.92900117486715,
+            "p99": 70.16998019069433,
+            "max": 104.09799963235855
+          }
+        },
+        "position_error_cm": {
+          "threat": {
+            "count": 109171,
+            "negative": 0,
+            "p50": 18,
+            "p95": 34,
+            "p99": 39
+          },
+          "ambient": {
+            "count": 3468328,
+            "negative": 0,
+            "p50": 18,
+            "p95": 34,
+            "p99": 39
+          }
+        },
+        "position_age_ms": {
+          "threat": {
+            "count": 109171,
+            "negative": 0,
+            "p50": 37,
+            "p95": 67,
+            "p99": 70
+          },
+          "ambient": {
+            "count": 3468328,
+            "negative": 0,
+            "p50": 37,
+            "p95": 67,
+            "p99": 70
+          }
+        }
+      },
+      "priming": false,
+      "valid": true
+    },
+    {
+      "tag": "2026-11-21_083817_s3a_C4_A_N8_r1",
+      "config": "C4",
+      "clients": 8,
+      "loss": 0,
+      "rate": 1000000,
+      "server_command": [
+        "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject",
+        "/Engine/Maps/Templates/Template_Default",
+        "-server",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\\2026-11-21_083817_s3a_C4_A_N8_r1_server.log",
+        "-UseIrisReplication=1",
+        "-dpcvars=Net.IsPushModelEnabled=1",
+        "-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxClientRate=1000000,[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxInternetClientRate=1000000,[/Script/Engine.Player]:ConfiguredInternetSpeed=1000000",
+        "-NCLClients=8",
+        "-NCLWarmup=20.0",
+        "-NCLCaptureFrames=1800",
+        "-NCLSettle=5.0",
+        "-NCLSeed=1",
+        "-NCLRunTag=2026-11-21_083817_s3a_C4_A_N8_r1",
+        "-NCLConfig=C4",
+        "-NCLOutDir=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a",
+        "-NCLExit",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding"
+      ],
+      "client_command_0": [
+        "127.0.0.1",
+        "-nullrhi",
+        "-abslog=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\\2026-11-21_083817_s3a_C4_A_N8_r1_client00.log",
+        "-UseIrisReplication=1",
+        "-ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxClientRate=1000000,[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxInternetClientRate=1000000,[/Script/Engine.Player]:ConfiguredInternetSpeed=1000000",
+        "-NCLRunTag=2026-11-21_083817_s3a_C4_A_N8_r1",
+        "-NCLOutDir=D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a",
+        "-NCLClientIndex=0",
+        "-NCLClientFPS=30",
+        "-NCLExit",
+        "-log",
+        "-unattended",
+        "-nosplash",
+        "-nosound",
+        "-traceautostart=0",
+        "-NoLiveCoding"
+      ],
+      "server_exit": 0,
+      "client_exits": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "inherited_masks": [
+        "0xFFFF",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000",
+        "0xFF0000"
+      ],
+      "wall_seconds": 98.0,
+      "csv": {
+        "file": "2026-11-21_083817_s3a_C4_A_N8_r1_server.csv",
+        "frames": 1800,
+        "finalised": true,
+        "metadata": {
+          "hasheaderrowatend": "1",
+          "eventtimestamps": "1",
+          "platform": "Windows",
+          "config": "Development",
+          "buildversion": "++UE5+Release-5.8-CL-58902052",
+          "engineversion": "5.8.4-58902052+++UE5+Release-5.8",
+          "enginereleaseversion": "5.8.4",
+          "os": "Windows 11 (25H2) [10.0.26200.9974]",
+          "cpu": "GenuineIntel|Intel(R) Core(TM) i7-14650HX",
+          "pgoenabled": "0",
+          "pgoprofilingenabled": "0",
+          "ltoenabled": "0",
+          "asan": "0",
+          "mergedmodules": "0",
+          "compacttset": "0",
+          "loginid": "cb4377c742481910ba0f5999e88874c8",
+          "llm": "0",
+          "zenstreaming": "0",
+          "systemresolution.resx": "1280",
+          "systemresolution.resy": "720",
+          "extradevelopmentmemorymb": "0",
+          "verbatimrhiname": "Null",
+          "rhiname": "Null",
+          "rhifeaturelevel": "SM6",
+          "shaderplatform": "PCD3D_SM6",
+          "gpu": "",
+          "gpudriver": "",
+          "deviceprofile": "WindowsEditor",
+          "largeworldcoordinates": "1",
+          "raytracing": "0",
+          "iris": "1",
+          "nclruntag": "2026-11-21_083817_s3a_C4_A_N8_r1",
+          "nclconfig": "C4",
+          "nclclients": "8",
+          "nclworkloadhash": "0x680F4C7A",
+          "csvid": "35B0767E4A2E05437584058337158685",
+          "targetframerate": "165",
+          "starttimestamp": "1795230632",
+          "namedevents": "0",
+          "hasgtstalls": "0",
+          "vsyncenabled": "0",
+          "csvbench_timingstat_ns": "41.502500",
+          "csvbench_customstat_ns": "25.815000",
+          "csvbench_duration_ms": "2.693000",
+          "endtimestamp": "1795230692",
+          "captureduration": "59.99081",
+          "csvmaxfilebytesreached": "0",
+          "commandline": "D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\NetCostLab\\NetCostLab.uproject\" /Engine/Maps/Templates/Template_Default -server -abslog=\"D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\\2026-11-21_083817_s3a_C4_A_N8_r1_server.log\" -UseIrisReplication=1 -dpcvars=Net.IsPushModelEnabled=1 -ini:Engine:[/Script/OnlineSubsystemUtils.IpNetDriver]:MaxClientRate=1000000",
+          "/script/onlinesubsystemutils.ipnetdriver]:maxinternetclientrate=1000000": "[/Script/Engine.Player]:ConfiguredInternetSpeed=1000000 -NCLClients=8 -NCLWarmup=20.0 -NCLCaptureFrames=1800 -NCLSettle=5.0 -NCLSeed=1 -NCLRunTag=2026-11-21_083817_s3a_C4_A_N8_r1 -NCLConfig=C4 -NCLOutDir=\"D:\\UNREAL PORTFOLIO\\P05_NetCostLab\\Benchmarks\\Raw\\2026-11-21_083817_s3a\" -NCLExit -log -unattended -nosplash -nosound -traceautostart=0 -NoLiveCoding\""
+        },
+        "events": {
+          "NetCostLab/BenchStart": 1,
+          "GC": 1,
+          "NetCostLab/BenchEnd": 1
+        },
+        "columns": {
+          "FrameTime": {
+            "n": 1800,
+            "mean": 33.328318277777775,
+            "min": 32.3752,
+            "median": 33.2875,
+            "p95": 34.145579999999995,
+            "p99": 34.377093,
+            "max": 35.0351
+          },
+          "Exclusive/GameThread/ServerReplicateActors": {
+            "n": 1800,
+            "mean": 0.8436888333333332,
+            "min": 0.6787,
+            "median": 0.80605,
+            "p95": 1.0888,
+            "p99": 1.32223,
+            "max": 1.605
+          },
+          "Exclusive/GameThread/NetworkOutgoing": {
+            "n": 1800,
+            "mean": 0.05036772222222222,
+            "min": 0.036,
+            "median": 0.0478,
+            "p95": 0.0647,
+            "p99": 0.08561199999999998,
+            "max": 0.3943
+          },
+          "Exclusive/GameThread/NetworkIncoming": {
+            "n": 1800,
+            "mean": 0.13425827777777777,
+            "min": 0.0781,
+            "median": 0.12915,
+            "p95": 0.1963,
+            "p99": 0.240417,
+            "max": 0.4417
+          },
+          "NetCostLab/BusyMsPrevFrame": {
+            "n": 1800,
+            "mean": 2.5356999444444446,
+            "min": 2.0197,
+            "median": 2.4803,
+            "p95": 3.0027,
+            "p99": 3.4124679999999996,
+            "max": 20.9732
+          },
+          "NetCostLab/OutBytes": {
+            "n": 1800,
+            "mean": 10953.357222222223,
+            "min": 9412.0,
+            "median": 11028.5,
+            "p95": 11794.05,
+            "p99": 11979.08,
+            "max": 12245.0
+          },
+          "NetCostLab/SatConnections": {
+            "n": 1800,
+            "mean": 0.0,
+            "min": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0
+          },
+          "NetCostLab/Clients": {
+            "n": 1800,
+            "mean": 8.0,
+            "min": 8.0,
+            "median": 8.0,
+            "p95": 8.0,
+            "p99": 8.0,
+            "max": 8.0
+          },
+          "NetFlushMs": {
+            "n": 1800,
+            "mean": 0.8940565555555555,
+            "min": 0.718,
+            "median": 0.8562500000000001,
+            "p95": 1.1430199999999997,
+            "p99": 1.3736909999999998,
+            "max": 1.6566
+          }
+        }
+      },
+      "server_report": {
+        "run_tag": "2026-11-21_083817_s3a_C4_A_N8_r1",
+        "config": "C4",
+        "workload_hash": "0x680F4C7A",
+        "window_seconds": 59.99116960167885,
+        "window_frames": 1800,
+        "long_frames": 0,
+        "saturated_connection_frames": 0,
+        "state_changes": 7679,
+        "anchor_drift_ms": 0,
+        "connections": [
+          {
+            "slot": 1,
+            "out_bytes": 2583577,
+            "bytes_per_second": 43065.95482558651,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 0,
+            "out_bytes": 2686234,
+            "bytes_per_second": 44777.15666881791,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 2,
+            "out_bytes": 2844121,
+            "bytes_per_second": 47408.99400501783,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 5,
+            "out_bytes": 1863898,
+            "bytes_per_second": 31069.53927345732,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 4,
+            "out_bytes": 2772089,
+            "bytes_per_second": 46208.28395921828,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 7,
+            "out_bytes": 2341882,
+            "bytes_per_second": 39037.11188745456,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 3,
+            "out_bytes": 2648765,
+            "bytes_per_second": 44152.581414679975,
+            "saturated_frames": 0
+          },
+          {
+            "slot": 6,
+            "out_bytes": 1975477,
+            "bytes_per_second": 32929.46300458053,
+            "saturated_frames": 0
+          }
+        ]
+      },
+      "bytes_per_second_per_client": {
+        "n": 8,
+        "mean": 41081.13562985161,
+        "min": 31069.53927345732,
+        "median": 43609.268120133245,
+        "p95": 46988.74548898798,
+        "p99": 47324.944301811855,
+        "max": 47408.99400501783
+      },
+      "saturated_share": 0.0,
+      "client_reports": 8,
+      "client_fps_min": 29.97736069575907,
+      "client_fps_max": 29.991821328888538,
+      "client_bytes_per_second_median": 43608.310979488655,
+      "all_clients_reported": true,
+      "correctness": {
+        "changes": 7679,
+        "clients": [
+          {
+            "client": "00",
+            "slot": -1,
+            "first_states": 141,
+            "received": 7609,
+            "not_received": 70,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "01",
+            "slot": -1,
+            "first_states": 154,
+            "received": 7618,
+            "not_received": 61,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "02",
+            "slot": -1,
+            "first_states": 193,
+            "received": 7493,
+            "not_received": 186,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "03",
+            "slot": -1,
+            "first_states": 293,
+            "received": 7466,
+            "not_received": 213,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "04",
+            "slot": -1,
+            "first_states": 404,
+            "received": 6800,
+            "not_received": 879,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "05",
+            "slot": -1,
+            "first_states": 267,
+            "received": 7545,
+            "not_received": 134,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "06",
+            "slot": -1,
+            "first_states": 399,
+            "received": 6447,
+            "not_received": 1232,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          },
+          {
+            "client": "07",
+            "slot": -1,
+            "first_states": 336,
+            "received": 7316,
+            "not_received": 363,
+            "mismatches": 0,
+            "relevancy_misses": 0
+          }
+        ],
+        "totals": {
+          "mismatches": 0,
+          "relevancy_misses": 0,
+          "not_received": 3138,
+          "first_states": 2187
+        },
+        "staleness_ms": {
+          "threat": {
+            "n": 0
+          },
+          "ambient": {
+            "n": 58294,
+            "mean": 80.45476489216391,
+            "min": 1.6429983079433441,
+            "median": 53.16049978137016,
+            "p95": 276.9493013620376,
+            "p99": 323.1810697540641,
+            "max": 420.9209978580475
+          }
+        },
+        "position_error_cm": {
+          "threat": {
+            "count": 0
+          },
+          "ambient": {
+            "count": 3500705,
+            "negative": 0,
+            "p50": 25,
+            "p95": 134,
+            "p99": 168
+          }
+        },
+        "position_age_ms": {
+          "threat": {
+            "count": 0
+          },
+          "ambient": {
+            "count": 3500705,
+            "negative": 0,
+            "p50": 53,
+            "p95": 279,
+            "p99": 322
+          }
+        }
+      },
+      "priming": false,
+      "valid": true
+    }
+  ]
+}

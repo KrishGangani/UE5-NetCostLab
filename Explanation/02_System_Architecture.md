@@ -110,9 +110,9 @@ The game later calls `SetFocusTarget(Handle, TargetNetHandle)` only when gamepla
 |---|---|---|
 | `ANCLGameMode` | `AGameModeBase` | Sets the controller class and no pawn class; `PostLogin` asks the workload for an avatar and makes it the player's view target; `Logout` frees it; `RestartPlayer` does nothing (there is no pawn to spawn) |
 | `ANCLGameState` | `AGameStateBase` | Replicates the run phase (`ENCLBenchPhase`: Waiting, WarmUp, Capture, Settle, Dump) so headless clients know when to start and stop logging and when to write their files and quit |
-| `ANCLPlayerController` | `APlayerController` | Overrides `GetPlayerViewPoint` to return its view target's (the avatar's) location and rotation on the server, so the view used by every system is server-determined and identical (`01b` #12). The avatar faces its direction of travel, so the view looks where the player walks (legacy priority depends on the view direction) |
+| `ANCLPlayerController` | `APlayerController` | Overrides `GetPlayerViewPoint` to return its view target's (the avatar's) location and rotation on the server, so the view used by every system is server-determined and identical (`01b` #12). The avatar faces its direction of travel, so the view looks where the player walks (legacy priority depends on the view direction). It also carries the player's slot to its owning client (`COND_OwnerOnly`), which the client's measurement needs (S3) |
 | `ANCLPlayerAvatar` | `AActor` | The server-driven stand-in for one player: replicated movement, its `PlayerSlot` (sent once). **Not a pawn and never possessed** (changed in S1): a possessed pawn is an autonomous proxy on its owner, which `COND_SimulatedOrPhysics` movement never reaches, and possession brings controller/pawn replication the study does not need. Being the controller's view target is all the replication views need (`NetConnection.cpp:861–865`) |
-| `ANCLDrone` | `AActor` | Replicated movement plus push-based gameplay fields (`State` struct: `Seq`, `Mode`, `TargetSlot`, `Health`; four loadout fields; `DroneIndex` sent once). On clients, overrides `OnRep_ReplicatedMovement` and `OnRep_State` to record arrivals (S3). On the server, overrides `AActor::GetNetPriority` for **C6**: when `ncl.LegacyFocusPriority` is on and the viewer's view target is the drone's focus avatar, it returns the engine's own view-target priority `NetPriority × Time × 4` (`ActorReplication.cpp:56–59`); otherwise `Super` (S5) |
+| `ANCLDrone` | `AActor` | Replicated movement plus push-based gameplay fields (`State` struct: `Seq`, `Mode`, `TargetSlot`, `Health`; four loadout fields; `DroneIndex` sent once). On clients, `OnRep_State` broadcasts each state arrival; the director records it (S3). Positions need no arrival hook: the client's director compares every drone's shown position with the true one each frame (S3 design change, `05` E1). On the server, overrides `AActor::GetNetPriority` for **C6**: when `ncl.LegacyFocusPriority` is on and the viewer's view target is the drone's focus avatar, it returns the engine's own view-target priority `NetPriority × Time × 4` (`ActorReplication.cpp:56–59`); otherwise `Super` (S5) |
 | `ANCLProp` | `AActor` | Stationary; four push-based fields that toggle on a seeded schedule |
 | `UNCLWorkloadSubsystem` | `UTickableWorldSubsystem` (works on the server; on clients it only counts arrivals when asked) | Seeded spawn from a **pure plan** (`MakePlan`: loops, prop positions, hash; tested without a world); each frame moves drones and avatars as a function of server time, applies the change schedule (calling `MARK_PROPERTY_DIRTY_FROM_NAME`) with one random stream **per event**, seeded from (seed, kind, object, event number), so no value depends on tick timing; records server truth; computes the workload hash; in C5 assigns drones to the prioritiser (retrying until each has an Iris handle) and updates focus targets when a drone retargets |
 | `UNCLBenchSubsystem` | `UTickableWorldSubsystem` (server and client) | The director. Reads `-NCL…=` arguments; server: waits for N clients, warm-up, `BeginCapture`, exactly 1,800 captured frames (`BenchStart` in the first), `EndCapture`, changes frozen, settle, dump, exit; samples per-connection `OutTotalBytes` and busy ms at `FWorldDelegates::OnWorldTickEnd` (after the net flush, `01b` #10) and publishes CSV stats; client: event recorder, frame-rate check, dumps on `Dump`, exits |
@@ -145,7 +145,7 @@ flowchart LR
     end
   end
   subgraph Clients["N client processes: packaged NetCostLab.exe -nullrhi (E-cores 0xFF0000)"]
-    CB["UNCLBenchSubsystem (client)<br/>arrival recorder · dump on phase"]
+    CB["UNCLBenchSubsystem (client)<br/>live position error and age · arrival recorder · dump on phase"]
   end
   RB -->|"start, pin, wait, kill"| Server
   RB -->|"start, pin, wait, kill"| Clients
@@ -156,7 +156,7 @@ flowchart LR
   PC -->|"GetPlayerViewPoint"| Rep
   Rep -->|"UDP loopback :7777"| CB
   BS -->|"CSV + manifest"| OUT[("Benchmarks\\Raw")]
-  WL -->|"truth log"| OUT
+  BS -->|"truth log, final state"| OUT
   CB -->|"arrival logs"| OUT
   OUT --> DV
 ```

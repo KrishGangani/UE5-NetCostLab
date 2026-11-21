@@ -165,6 +165,15 @@ def new_batch(label: str) -> tuple[str, str]:
     return batch, out_dir
 
 
+def read_json(path: str) -> dict | None:
+    """A run report, or None if it is missing or unreadable (a process killed while writing it)."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
 def write_manifest(batch: str, manifest: dict) -> str:
     """Writes Benchmarks/Raw/<batch>_manifest.json (committed), passed through sanitize(); returns its path."""
     path = os.path.join(RAW_DIR, f"{batch}_manifest.json")

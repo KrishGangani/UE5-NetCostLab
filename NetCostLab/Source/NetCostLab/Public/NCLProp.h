@@ -22,7 +22,18 @@ public:
 	/** Server: one scheduled change of all four fields, each marked dirty. */
 	void ApplyToggle(int8 NewOwnerSlot);
 
+	/** Server: the prop's stable index (0..N-1), sent once so the state dumps can name props (S3). */
+	void SetPropIndex(int16 NewIndex);
+
+	int16 GetPropIndex() const { return PropIndex; }
+
+	/** CRC of the four replicated fields: equal on server and client = the same state (S3). */
+	uint32 GetStateCrc() const;
+
 private:
+	UPROPERTY(Replicated)
+	int16 PropIndex = INDEX_NONE;
+
 	UPROPERTY(Replicated)
 	uint8 PropState = 0;
 

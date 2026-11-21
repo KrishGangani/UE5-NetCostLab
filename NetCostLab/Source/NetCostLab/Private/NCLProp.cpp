@@ -3,6 +3,7 @@
 #include "NCLProp.h"
 
 #include "Components/SceneComponent.h"
+#include "Misc/Crc.h"
 #include "NCLNet.h"
 #include "Net/Core/PushModel/PushModel.h"
 #include "Net/UnrealNetwork.h"
@@ -31,6 +32,24 @@ void ANCLProp::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetime
 	DOREPLIFETIME_WITH_PARAMS_FAST(ANCLProp, Charges, PushBased);
 	DOREPLIFETIME_WITH_PARAMS_FAST(ANCLProp, Cooldown, PushBased);
 	DOREPLIFETIME_WITH_PARAMS_FAST(ANCLProp, OwnerSlot, PushBased);
+
+	// Sent with the prop's first update only; it never changes afterwards.
+	const FDoRepLifetimeParams InitialOnly{COND_InitialOnly, REPNOTIFY_OnChanged, /*bIsPushBased*/ true};
+	DOREPLIFETIME_WITH_PARAMS_FAST(ANCLProp, PropIndex, InitialOnly);
+}
+
+void ANCLProp::SetPropIndex(int16 NewIndex)
+{
+	PropIndex = NewIndex;
+	MARK_PROPERTY_DIRTY_FROM_NAME(ANCLProp, PropIndex, this);
+}
+
+uint32 ANCLProp::GetStateCrc() const
+{
+	uint32 Crc = FCrc::TypeCrc32(PropState);
+	Crc = FCrc::TypeCrc32(Charges, Crc);
+	Crc = FCrc::TypeCrc32(Cooldown, Crc);
+	return FCrc::TypeCrc32(OwnerSlot, Crc);
 }
 
 void ANCLProp::ApplyToggle(int8 NewOwnerSlot)

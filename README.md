@@ -4,11 +4,11 @@
 
 **Domain:** Multiplayer & network optimisation · **Difficulty:** ★★★★☆ · **Engine:** UE 5.8.4
 
-> **Status: in progress. There are no results yet.** Sections marked *(pending)* are filled in only from real measurements, in the phase named. The success criteria are **targets fixed before any code exists, not results**.
+> **Status: v1.0, smallest working form (2026-11-21).** The workload, the measurement harness, the correctness tools, C6 and the gameplay-aware Iris prioritiser (C5) are built, tested and running. The planned benchmark campaign (N = 16/32, the bandwidth cap, packet loss, all six configurations) was **not run** (owner direction). The numbers below come from 8-client runs only, and every success criterion that needs the campaign is marked *not measured* ([09](Explanation/09_Testing_And_Benchmarks.md#success-criteria-01-65-from-the-data-that-exists)).
 
 | Phase | 1 Problem | 2 Research | 3 Architecture | 4 Foundation | 5 Implementation | 6 Explanation | 7 Testing | 8 Profiling | 9 Review | 10 Portfolio |
 |---|---|---|---|---|---|---|---|---|---|---|
-| State | ✓ | ✓ | ✓ final | ✓ | in progress (S2 of 8 done) | ongoing | — | — | — | — |
+| State | ✓ | ✓ | ✓ final | ✓ core done (S1–S3, S5–S7 code; no S4/S5 campaign, no S8) | ✓ | ✓ tools validated (S3) | campaign not run | S1–S3 reviewed | — |
 
 ---
 
@@ -41,15 +41,52 @@ Final (v1.0): [Explanation/02_System_Architecture.md](Explanation/02_System_Arch
 
 ## Before / after comparison
 
-*(pending, Phase 8)*. C1–C6 on the same workload; C4 vs C5 and C2 vs C6 under a bandwidth cap.
+**What the gameplay prioritiser does (C5, N = 8, two runs).** A drone that is attacking a player gets a priority boost for that player's connection only. Its state changes then reach that player about **three times sooner** than other drones' changes. Median staleness from server change to client arrival, two runs of C5:
+
+```mermaid
+xychart-beta
+    title "C5: state staleness, median (ms), two runs"
+    x-axis ["threat, run 1", "threat, run 2", "ambient, run 1", "ambient, run 2"]
+    y-axis "ms" 0 --> 60
+    bar [13.0, 19.1, 48.3, 54.0]
+```
+
+Position error on the attacked player's screen: p50 7–10 cm for threat drones vs 24–26 cm for ambient drones; p95 31–33 cm vs 136–137 cm. Every run ended with **0 final-state mismatches** and 256 of 256 drones assigned to the prioritiser with 0 failures ([09](Explanation/09_Testing_And_Benchmarks.md), batch `2026-11-21_110518_finalb`).
+
+**What this is not:** the planned proof compares C5 with C4 (Iris without our term) under a bandwidth cap, where priority decides what gets sent at all. That comparison (SC4/SC5) was not run.
 
 ## Benchmark results
 
-*(pending, Phase 8)*. Median, p95 and p99 server ms per net tick and bytes/s per client at N = 8/16/32, with slopes; position error and staleness for threat vs ambient drones at 0/1/3/5% loss. Raw data in [Benchmarks/](Benchmarks/README.md). The pass/fail criteria were fixed in advance: [01_Problem_Analysis.md §6.5](Explanation/01_Problem_Analysis.md).
+8 headless clients, 1 MB/s per client (uncapped), 256 drones + 768 props, server pinned to the P-cores and clients to the E-cores. Each value is one run's median over a 30 s window (900 server frames); the two runs per configuration were interleaved (C1, C5, C5, C1) after a discarded priming run:
+
+| Metric | C1 legacy | C5 Iris + gameplay prioritiser |
+|---|---|---|
+| Server net-tick time, median | 3.90 / 3.99 ms | **0.90 / 0.85 ms** |
+| Server net-tick time, p95 | 4.97 / 5.72 ms | 1.48 / 1.20 ms |
+| Bytes/s per client, median | 67,073 / 67,101 | 43,060 / 43,044 |
+| Threat-drone staleness, median | 38.5 / 37.9 ms | **13.0 / 19.1 ms** |
+| Ambient-drone staleness, median (p95) | 36.8 / 37.6 ms (67 ms) | 48.3 / 54.0 ms (305 ms) |
+
+```mermaid
+xychart-beta
+    title "Server net-tick time, median (ms), N = 8"
+    x-axis ["C1 run 1", "C1 run 2", "C5 run 1", "C5 run 2"]
+    y-axis "ms" 0 --> 5
+    bar [3.90, 3.99, 0.90, 0.85]
+```
+
+How to read this honestly:
+- **C1 vs C5 changes two things at once**: Iris and our term. Iris alone (C4, measured in steps S2/S3 under the same conditions) ran at 0.86–0.88 ms and 43.6 kB/s per client, so the CPU and bandwidth gap to C1 comes from Iris, not from the prioritiser. Iris's distance model also spreads far drones out in time (ambient p95 about 300 ms in both C4 and C5).
+- The server is the editor binary (the launcher engine has no Server target), so only comparisons are meaningful.
+- Not measured: N = 16/32, scaling slopes, the bandwidth cap, packet loss, C2/C3/C6 runs (SC3–SC8). The tools for all of these exist (`Tools/run_bench.py`, `Tools/divergence.py`).
+
+The measurement tools were checked before use: 100 ms of added server lag raised both measured staleness and position age by 117 ms. That is the lag plus the wait for the next 33 ms connection tick, where the engine releases a lagged packet ([09](Explanation/09_Testing_And_Benchmarks.md) S3-c).
+
+Raw data: [Benchmarks/](Benchmarks/README.md). The pass/fail criteria were fixed in advance: [01_Problem_Analysis.md §6.5](Explanation/01_Problem_Analysis.md).
 
 ## Recorded demonstration
 
-*(pending, Phase 10)*. The same client view under C4 and C5 with threat drones outlined, plus the scaling charts. Saved in `Media/`.
+Not made (owner direction: no video).
 
 ## Source code
 

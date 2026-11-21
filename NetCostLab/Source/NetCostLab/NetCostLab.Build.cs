@@ -15,5 +15,10 @@ public class NetCostLab : ModuleRules
 		// NetCore: the push-model macros (Net/Core/PushModel/PushModel.h); Json: the director's run reports.
 		// Both are used only by our .cpp files.
 		PrivateDependencyModuleNames.AddRange(new string[] { "NetCore", "Json" });
+
+		// C5 (step S7): the gameplay prioritiser lives in the NetCostLabCore plugin; the binding (UNCLFocusSubsystem)
+		// uses Iris types, so the module needs IrisCore and the Iris defines the engine headers expect.
+		PrivateDependencyModuleNames.Add("NetCostLabCore");
+		SetupIrisSupport(Target);
 	}
 }

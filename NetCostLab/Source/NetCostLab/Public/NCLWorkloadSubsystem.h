@@ -113,6 +113,14 @@ public:
 	/** The direction of travel at Time (yaw only): an avatar looks where it walks. */
 	static FRotator LoopFacing(const FLoop& Loop, double Time);
 
+	/** How long ago, at Time, the loop passed the point Shown (in seconds): the age of a position a client shows.
+	 *  Wrapped to half a loop either way, so a point shown slightly ahead (quantisation) gives a small negative age;
+	 *  ages beyond half a loop period alias (at least 2.6 s for this workload's drones). */
+	static double LoopAgeSeconds(const FLoop& Loop, const FVector& Shown, double Time);
+
+	/** The seed and counts this world's workload was built from. */
+	const FSettings& GetSettings() const { return Settings; }
+
 	/** Half the side of the square arena, in cm: a 200 m square centred on the origin (01 section 6.1). */
 	static constexpr double ArenaHalfExtent = 10000.0;
 

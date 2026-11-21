@@ -132,8 +132,8 @@ Each step from C1 to C5 changes **one** factor: push, then the graph, then the s
 | Bytes sent per client per second over the capture window | B/s | Server-side `UNetConnection::OutTotalBytes` delta per connection; client-side `InTotalBytes` as a cross-check |
 | Scaling slope | ms per added client; B/s per added client (server total) | Least-squares fit over N = 8/16/32 |
 | Saturated connection-frames (`IsNetReady() == false`) | % | Our per-frame server sample |
-| Position error of each drone on each client vs the server at the same instant | cm | Client and server event logs on the shared clock (`FPlatformTime::Cycles64`, QueryPerformanceCounter) joined offline |
-| Staleness of discrete state (server change → client receive) | ms | Same logs |
+| Position error of each drone on each client vs its true position at the same instant, and the **age** of the shown position | cm, ms | Computed live on each client, every frame: the client rebuilds the seeded plan and maps the shared clock (`FPlatformTime::Seconds`, QueryPerformanceCounter) to the server's world time (`05` E1). Histograms per client, merged per run |
+| Staleness of discrete state (server change → client receive) | ms | The server's truth log and the clients' arrival logs on the same clock, joined offline by `divergence.py` |
 | Final-state mismatches after a 5 s settle with no changes | count | End-of-run state dump on server and clients |
 
 Position error and staleness are reported separately for **threat drones** (attacking this client's avatar) and **ambient drones**.

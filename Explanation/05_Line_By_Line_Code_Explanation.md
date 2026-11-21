@@ -8,6 +8,7 @@
 | B | Phase 2 probe and Phase 4 check F4 | `Tools\netlab_env.py`, `Tools\probe_net.py`, `Tools\foundation_job.py`, the removed probe `NetCostLabServer.Target.cs` |
 | C | Phase 5, S1 (the workload) | `NetCostLab.Build.cs` (update), `NCLLog.h`, `NCLNet.h`, module `.cpp` (update), `NCLDrone`, `NCLProp`, `NCLPlayerAvatar`, `NCLPlayerController`, `NCLGameMode`, `NCLWorkloadSubsystem`, `Tests\NCLWorkloadTests.cpp`, `Config\DefaultEngine.ini` (game mode), `Tools\check_job.py`, `Tools\run_tests.bat`, `Tools\probe_net.py`, `Tools\netlab_env.py`, `Tools\foundation_job.py` (updates) |
 | D | Phase 5, S2 (director, telemetry, run script) | `NCLGameState`, `NCLBenchSubsystem`, `NCLGameMode` and `NCLWorkloadSubsystem` (updates), `NetCostLab.Build.cs` (`Json`), `Tools\run_bench.py`, `Tools\csv_stats.py`, `Tools\check_job.py` (`--bench`) |
+| E | Phase 5, S3 (correctness measurement) | `NCLHistogram.h`, `NCLGameState` (run info), `NCLBenchSubsystem` (truth log, client error and age, arrivals, state dumps), `NCLDrone` (RepNotify, CRC), `NCLProp` (index, CRC), `NCLWorkloadSubsystem` (`LoopAgeSeconds`, accessors), `Tests\NCLBenchTests.cpp`, `Tools\divergence.py`, `Tools\run_bench.py` (correctness block) |
 
 ---
 
@@ -357,6 +358,7 @@ void ANCLPlayerController::GetPlayerViewPoint(FVector& OutLocation, FRotator& Ou
 | `HasAuthority()` | Only the server's copy of the controller changes behaviour. On a client (the S8 demo camera) the engine's normal logic still runs |
 | `if (const AActor* Target = GetViewTarget(); Target && Target != this)` | C++17 `if` with an initialiser (`04` §9): the variable exists only inside the `if`. `Target != this`: a controller with no view target set views itself; then the engine's answer is used |
 | `Super::GetPlayerViewPoint(...)` | The fallback keeps the engine's behaviour for every other case |
+| `UPROPERTY(Replicated) int8 PlayerSlot`, `COND_OwnerOnly`, push-based; `SetPlayerSlot` from `ANCLGameMode::PostLogin` (S3) | Each client learns its own player slot from its own controller, one byte sent once and to that client only. *Why not from the view target:* the first S3 job showed every Iris client with slot −1. The server's `SetViewTarget` reaches a client as an RPC that names the avatar; under Iris it can arrive before the avatar exists on that client, and the client's view target then stays unset. That made the threat class and the relevancy check blind for C4 (`07` S3-7) |
 | `OutRotation = Target->GetActorRotation()` | The view direction matters: legacy priority multiplies an actor behind the viewer by 0.2 or 0.4 (by distance) and one nearly straight ahead by 2 (`ActorReplication.cpp:67–88`). The workload turns each avatar to face its direction of travel every tick (C7, `LoopFacing`), so the view looks where the player walks. Before the S1 review the avatars never turned, and every view looked along +X |
 
 ### C6. `NCLGameMode.h` / `.cpp`
@@ -476,3 +478,87 @@ S2 adds no C++ automation test: the director has no pure logic left once saturat
 | `Tools\csv_stats.py` | P01's script adapted: the P05 columns by default, `NetFlushMs` derived per frame as `ServerReplicateActors` + `NetworkOutgoing` (`row_sums`; a frame counts only if both cells exist), the `nclruntag` metadata key, the P05 event names in the self-test, and the event-split option removed (P05 captures contain only the window). The EVENTS column is looked up once per capture (`events_index`). A partial capture (no metadata row) drops any header row and unreadable cells instead of failing |
 | `Tools\check_job.py` | `--bench "ARGS"` (repeatable): `run_bench.py` inside the same queue job, after the probes (one loop over both kinds) |
 | `Tools\netlab_env.py` | `MAP`, `PACKAGED_CLIENT`, `COMMON_ARGS`, `IPNETDRIVER` and `REPGRAPH_INI` now live here, shared by `probe_net.py` and `run_bench.py` |
+
+---
+
+## Part E · Step S3: correctness measurement
+
+S3 measures what a player would see: how far each drone is from where it really is, how old the shown position is, how long a state change takes to arrive, and whether every client ends with the server's state. One clock serves every process: `FPlatformTime::Seconds()` reads the machine's QueryPerformanceCounter, and its constant offset is the same in every process (`Windows/WindowsPlatformTime.h:23–30, 46–49`). Server and clients run on one machine, so their times can be subtracted directly.
+
+### E1. The truth, without a log of positions
+
+The server never logs positions: a drone's position is a pure function of the server's world time (`LoopPosition`, `05` C7). A client can compute it as well, if it knows two things:
+- **The plan.** `ANCLGameState` replicates an `FNCLRunInfo`: seed, counts and workload hash. The client rebuilds the plan with the same `MakePlan` and checks the hash (`PrepareClientTruth`).
+- **The server's world time at the client's instant.** `FNCLRunInfo` also carries one anchor, taken when the window opens: `FApp::GetCurrentTime()` (the server frame's start on the shared clock) and the world time of that frame. World time advances by the same frame deltas as that clock, so `server time(t) = WorldSecondsAtAnchor + (t − ClockAtAnchor)`.
+
+*Design change (S3):* 02 planned client logs of every movement arrival, joined offline on a 10 ms grid. At 256 drones × 30 Hz × 60 s that is about 460,000 records per client per run. Computing the error live on each client against the rebuilt plan gives the same metric with no movement files.
+
+| Piece | What it does, and why |
+|---|---|
+| `FNCLRunInfo` (`NCLGameState.h`), `SetRunInfo` | Push-based, set once in `BeginMeasuredWindow`, in the same frame and the same game-state update as the `Capture` phase. The director keeps it in `RunInfo` on both sides: the server's anchor, or the one the client received once its plan checked out |
+| Anchor drift, server | Every captured frame compares world time with the clock since the anchor. World time clamps a frame longer than `MaxUndilatedFrameTime` (`WorldSettings.cpp:334–343`), so after such a hitch the clients' mapping would be off. The report holds `anchor_drift_ms`; `run_bench.py` makes a run with more than 5 ms invalid |
+| `UNCLWorkloadSubsystem::LoopAgeSeconds(Loop, Shown, Time)` | The age of a shown position: the angle the truth has moved past the shown point, in the direction of travel, divided by the angular speed. The angle is wrapped into [−π, π] in one step (`x − 2π·round(x / 2π)`; `FMath::UnwindRadians` loops once per turn, and the true angle grows with the run). Ages beyond half a loop period alias; that is at least 2.6 s for these drones. Tested by `NetCostLab.Workload.LoopAgeMatchesDelay` |
+| Client `UpdateOwnSlot()` | The client's slot, read from its controller's replicated `PlayerSlot` until it arrives (`05` C5) |
+| Client `SampleDroneErrors()`, every frame of the window | For each drone the client holds (`TActorIterator`): error = distance from the true position at the server time of now; age = `LoopAgeSeconds`. A drone attacking this client's avatar (its replicated `TargetSlot` = own slot) goes into the **threat** histograms, every other drone into **ambient** |
+| `FNCLHistogram` (`NCLHistogram.h`) | 1-unit bins (cm, ms) plus overflow, with exact counts, so the clients' histograms can be added together before percentiles are taken. Nearest-rank percentiles at bin resolution. Tested by `NetCostLab.Bench.HistogramPercentiles` |
+
+### E2. State staleness: truth log and arrivals
+
+| Piece | What it does, and why |
+|---|---|
+| `ANCLDrone::OnStateChanged` (a static multicast delegate, `06` §25) | One event for both roles: the server broadcasts it in `ApplyStateChange`; a client broadcasts it in `OnRep_State` (`State` is now `ReplicatedUsing = OnRep_State`). The drone measures nothing; the director listens. `bFirstState` = `!HasActorBegunPlay()`: a newly replicated actor gets its notifies before it begins play (legacy `DataChannel.cpp:3518` then `:3537`; Iris applies the state before `PostNetInit`, `NetActorFactory.cpp:554`), so its first notify is the drone becoming relevant, not the delivery of a change |
+| `OnDroneStateChanged`, server | Adds (drone, `Seq`, target, time) to the truth log while the phase is `Capture`. The time is `FApp::GetCurrentTime()`, the start of the frame that applied the change |
+| `OnDroneStateChanged`, client | Adds the same record, with the arrival time and `bFirstState`, from the warm-up until `Dump`. The client's phase lags the server's by the replication delay, so recording starts a whole warm-up early; only arrivals that match a change of the truth log count |
+| `<run>_server_truth.csv`, `<run>_clientNN_arrivals.csv` | Written after the window. `divergence.py` joins them by (drone, `Seq`) |
+
+### E3. Final state and relevancy
+
+| Piece | What it does, and why |
+|---|---|
+| `GetStateCrc()` on drones and props | A CRC of every replicated gameplay field, taken field by field so padding can never enter it. Equal on server and client means the same state |
+| `ANCLProp::PropIndex` | A stable index, sent once (`COND_InitialOnly`), so the dumps can name props, as `DroneIndex` names drones |
+| `WriteState(Suffix)` → `<run>_server_state.csv`, `<run>_clientNN_state.csv` | After the 5 s settle, with changes frozen: one row per drone, prop and avatar in this world (`TActorIterator`; kind, index or slot, CRC, position). The same function on server and clients |
+
+### E4. `Tools\divergence.py`
+
+| Piece | What it does, and why |
+|---|---|
+| `analyse_run(run_dir, tag)` | **Staleness** = arrival time − server frame start, for each change a client received (first states left out). Split into threat and ambient by the change's target slot. **Not received** counts changes a client never got: the drone was not relevant, or a later change overtook it. **Final mismatches** = held actors whose CRC differs from the server's (SC7 requires 0). **Relevancy misses** = drones and props within 145 m (the cull distance minus a 5 m margin) of the client's avatar that the client does not hold. A client without a known slot gets an error entry and no relevancy number (never a 0 that means "not checked"); `run_bench.py` makes such a run invalid (`07` S3-8). **Position error and age**: the clients' histograms merged by adding bins |
+| `--selftest DIR` | A hand-written two-client run with every expected number worked out on paper. Reports are read with `netlab_env.read_json` (shared with `run_bench.py`), so a truncated report becomes an error entry, not a crash |
+| Called by `run_bench.py` | Each run's record gets a `correctness` block; the progress line shows the ambient staleness and age medians and the mismatches |
+
+---
+
+## Part F · Steps S5–S7 (smallest working form): C6, the prioritiser, C5
+
+Owner direction (2026-11-21): finish the core in its smallest working form; no baseline campaign, no Scenario B calibration, at most 8 clients per run. What exists:
+
+### F1. C6: the focus rule in the legacy hook (`NCLDrone.h/.cpp`)
+
+| Piece | What it does, and why |
+|---|---|
+| `GetNetPriority(ViewPos, ViewDir, Viewer, ViewTarget, …) override` | With `ncl.LegacyFocusPriority` on and the drone's `TargetSlot` equal to the viewing avatar's slot, returns `NetPriority × Time × 4`: the engine's own factor for the viewer's view target (`ActorReplication.cpp:55–59, 91`). Otherwise `Super`. Legacy replication only; Iris and the Replication Graph never call this hook |
+| `TAutoConsoleVariable<bool> ncl.LegacyFocusPriority` | Off by default; C6 sets it with `-dpcvars=` |
+| `ConsumeFocusBoostCount()` | How often the rule raised a priority since the last call; the director writes it per frame as `NetCostLab/LegacyFocusBoosts` |
+
+### F2. The gameplay prioritiser (plugin `NetCostLabCore`: `NCLGameplayPrioritizer.h/.cpp`)
+
+| Piece | What it does, and why |
+|---|---|
+| `UNCLGameplayPrioritizerConfig : USphereNetObjectPrioritizerConfig` | Adds `FocusPriorityBoost` (2.0, `DefaultEngine.ini`). The sphere values are the class defaults, the same as the engine's `DefaultPrioritizer` uses, so C5 = C4 + one term |
+| `UNCLGameplayPrioritizer : USphereNetObjectPrioritizer` | `Prioritize` = `Super::Prioritize` (Epic's distance model, unchanged) then `ApplyFocusBoost` on the same batch |
+| `Assign(System, Self, Handle)` | Calls `UReplicationSystem::SetPrioritizer`, which calls our `AddObject` inside the same call (`ReplicationPrioritization.cpp:414, 452`); `AddObject` records the internal index it is given. Iris shows prioritisers only internal indices, so this is how the prioritiser learns which index is which drone, with public API only. A failed capture is counted and never boosted |
+| `SetFocusTarget(Handle, FNetHandle)` | Stores the target's net-handle id per internal index (0 = none) |
+| `static ApplyFocusBoost(Indices, Priorities, FocusIds, Views, Boost)` | Pure: + Boost for every object whose focus id equals a view's target or controller id, once per object. Tested by `NetCostLab.Prioritizer.FocusBoost` (matching view only, controller match, split screen, invalid focus, zero objects, index beyond the table) |
+| `OnMaxInternalNetRefIndexIncreased`, `RemoveObject` | Keep the per-index table sized and cleared |
+| Registration (`DefaultEngine.ini`) | `+NetObjectPrioritizerDefinitions=(PrioritizerName=NCLGameplayPrioritizer, …)`. Registered in every configuration, but it holds only objects the game assigns to it (C5) |
+
+### F3. C5: `UNCLFocusSubsystem` (game module)
+
+| Piece | What it does, and why |
+|---|---|
+| `-NCLPrioritizer=Gameplay`, server only | Finds the prioritiser with `UReplicationSystem::GetPrioritizer(Name)` (`ReplicationSystem.h:366`); an error if it is missing (never a silent C4) |
+| `AssignPendingDrones()`, each tick until done | A drone has an Iris handle once it has begun replicating, so drones are assigned when `UObjectReplicationBridge::GetReplicatedRefHandle` returns a valid handle |
+| `OnDroneStateChanged` → `UpdateFocus` | The same drone event the director uses: on every state change, the drone's focus becomes the net handle (`FReplicationSystemUtil::GetNetHandle`) of the avatar in its target slot, or none |
+| Director columns | `NetCostLab/GameplayFocusBoosts` per frame; `c5_assigned`, `c5_pending`, `c5_assign_failures` in `_server.json` |
+| `NetCostLab.Build.cs` | Private dependency on `NetCostLabCore`, and `SetupIrisSupport(Target)` |

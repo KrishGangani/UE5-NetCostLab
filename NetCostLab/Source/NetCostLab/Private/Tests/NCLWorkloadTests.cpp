@@ -110,6 +110,31 @@ bool FNCLWorkloadLoopMotionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNCLWorkloadLoopAgeTest, "NetCostLab.Workload.LoopAgeMatchesDelay", NCLWorkloadTests::Flags)
+bool FNCLWorkloadLoopAgeTest::RunTest(const FString& Parameters)
+{
+	UNCLWorkloadSubsystem::FLoop Loop;
+	Loop.Center = FVector(100.0, -200.0, 300.0);
+	Loop.Radius = 1000.0;
+	Loop.Phase = 0.25;
+	for (const double AngularSpeed : {0.5, -0.5})
+	{
+		Loop.AngularSpeed = AngularSpeed;
+		const double Now = 10.0;
+		// A position the loop had 50 ms ago is 50 ms old, in both directions of travel.
+		TestTrue(*FString::Printf(TEXT("50 ms behind (angular speed %.1f)"), AngularSpeed),
+			FMath::IsNearlyEqual(UNCLWorkloadSubsystem::LoopAgeSeconds(Loop, UNCLWorkloadSubsystem::LoopPosition(Loop, Now - 0.05), Now), 0.05, 1e-9));
+		TestTrue(TEXT("the true position is 0 ms old"),
+			FMath::IsNearlyZero(UNCLWorkloadSubsystem::LoopAgeSeconds(Loop, UNCLWorkloadSubsystem::LoopPosition(Loop, Now), Now), 1e-9));
+		TestTrue(TEXT("a position slightly ahead is slightly negative"),
+			UNCLWorkloadSubsystem::LoopAgeSeconds(Loop, UNCLWorkloadSubsystem::LoopPosition(Loop, Now + 0.01), Now) < 0.0);
+		// The height does not matter: only the angle around the centre does.
+		TestTrue(TEXT("height ignored"), FMath::IsNearlyEqual(UNCLWorkloadSubsystem::LoopAgeSeconds(Loop,
+			UNCLWorkloadSubsystem::LoopPosition(Loop, Now - 0.2) + FVector(0.0, 0.0, 50.0), Now), 0.2, 1e-9));
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNCLWorkloadStreamTest, "NetCostLab.Workload.ChangeStreamsArePure", NCLWorkloadTests::Flags)
 bool FNCLWorkloadStreamTest::RunTest(const FString& Parameters)
 {

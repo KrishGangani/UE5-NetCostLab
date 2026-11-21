@@ -64,7 +64,7 @@ UNCLWorkloadSubsystem::FSettings UNCLWorkloadSubsystem::ReadSettings()
 	FParse::Value(CommandLine, TEXT("NCLProps="), Read.NumProps);
 	FParse::Value(CommandLine, TEXT("NCLCountLog="), Read.CountLogInterval);
 	Read.NumDrones = FMath::Clamp(Read.NumDrones, 0, static_cast<int32>(MAX_int16));
-	Read.NumProps = FMath::Max(Read.NumProps, 0);
+	Read.NumProps = FMath::Clamp(Read.NumProps, 0, static_cast<int32>(MAX_int16));
 	return Read;
 }
 
@@ -89,6 +89,21 @@ FRotator UNCLWorkloadSubsystem::LoopFacing(const FLoop& Loop, double Time)
 	// The derivative of LoopPosition: the velocity points along the tangent, its sign set by the direction of travel.
 	const double Angle = Loop.Phase + Loop.AngularSpeed * Time;
 	return FVector(-Loop.AngularSpeed * FMath::Sin(Angle), Loop.AngularSpeed * FMath::Cos(Angle), 0.0).ToOrientationRotator();
+}
+
+double UNCLWorkloadSubsystem::LoopAgeSeconds(const FLoop& Loop, const FVector& Shown, double Time)
+{
+	if (Loop.AngularSpeed == 0.0)
+	{
+		return 0.0;
+	}
+	// The angle the truth has moved past the shown point, in the direction of travel, over the angular speed.
+	const double ShownAngle = FMath::Atan2(Shown.Y - Loop.Center.Y, Shown.X - Loop.Center.X);
+	const double TrueAngle = Loop.Phase + Loop.AngularSpeed * Time;
+	// Wrapped into [-pi, pi] in one step (UnwindRadians loops once per turn, and TrueAngle grows with the run).
+	const double Behind = (TrueAngle - ShownAngle) * FMath::Sign(Loop.AngularSpeed);
+	const double Wrapped = Behind - UE_DOUBLE_TWO_PI * FMath::RoundToDouble(Behind / UE_DOUBLE_TWO_PI);
+	return Wrapped / FMath::Abs(Loop.AngularSpeed);
 }
 
 int32 UNCLWorkloadSubsystem::TakeDue(FSchedule& Schedule, double Now, double Period)
@@ -194,6 +209,7 @@ void UNCLWorkloadSubsystem::SpawnWorkload(UWorld& World)
 	{
 		ANCLProp* Prop = World.SpawnActor<ANCLProp>(ANCLProp::StaticClass(), FTransform(Plan.PropPositions[Index]), SpawnParams);
 		check(Prop);
+		Prop->SetPropIndex(static_cast<int16>(Index));
 		Props.Add(Prop);
 		ToggleSchedules.Add({Now + PropTogglePeriod * (Index + 0.5) / Plan.PropPositions.Num(), 0});
 	}

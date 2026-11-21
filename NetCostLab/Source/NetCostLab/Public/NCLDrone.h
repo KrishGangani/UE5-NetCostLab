@@ -46,6 +46,15 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/** C6 (legacy replication only; Iris and the Replication Graph never call it): with ncl.LegacyFocusPriority on, a
+	 *  drone whose target is the viewing player's avatar gets the engine's own view-target priority, NetPriority x Time
+	 *  x 4 (ActorReplication.cpp:56-59). Otherwise the engine's rule (Super). */
+	virtual float GetNetPriority(const FVector& ViewPos, const FVector& ViewDir, AActor* Viewer, AActor* ViewTarget,
+		UActorChannel* InChannel, float Time, bool bLowBandwidth) override;
+
+	/** Server: how often the C6 rule raised a priority since the last call, then reset (the director's CSV column). */
+	static int32 ConsumeFocusBoostCount();
+
 	/** Server: the drone's stable index (0..N-1), sent once so clients can name drones in their logs. */
 	void SetDroneIndex(int16 NewIndex);
 
@@ -58,11 +67,23 @@ public:
 	int16 GetDroneIndex() const { return DroneIndex; }
 	const FNCLDroneState& GetState() const { return State; }
 
+	/** CRC of every replicated gameplay field (state and loadout): equal on server and client = the same state (S3). */
+	uint32 GetStateCrc() const;
+
+	/** Broadcast when a drone's state changes: on the server when a change is applied, on a client when it arrives
+	 *  (bFirstState: the first state of an actor that just appeared, i.e. became relevant). The benchmark director
+	 *  listens; the drone measures nothing. */
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnStateChanged, const ANCLDrone&, bool /*bFirstState*/);
+	static FOnStateChanged OnStateChanged;
+
 private:
+	UFUNCTION()
+	void OnRep_State();
+
 	UPROPERTY(Replicated)
 	int16 DroneIndex = INDEX_NONE;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_State)
 	FNCLDroneState State;
 
 	UPROPERTY(Replicated)
